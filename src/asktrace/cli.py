@@ -80,16 +80,21 @@ def _positive_int(value: str) -> int:
     return n
 
 
+COMMANDS = ("ingest", "tag", "report", "grass", "stats", "hook")
+
+
 def _is_hook_call(argv: list[str]) -> bool:
-    """True when the subcommand is `hook`, skipping global options before it."""
-    i = 0
-    while i < len(argv):
-        if argv[i] == "--db":
-            i += 2
-        elif argv[i].startswith("-"):
-            i += 1
-        else:
-            return argv[i] == "hook"
+    """True when the first command name in argv is `hook` (the value of --db is skipped).
+
+    Looks for a known command rather than the first positional so that an abbreviated
+    option argparse accepts (`--d PATH hook`) is still recognised as a hook call.
+    """
+    args = iter(argv)
+    for a in args:
+        if a == "--db":
+            next(args, None)
+        elif a in COMMANDS:
+            return a == "hook"
     return False
 
 
@@ -98,8 +103,10 @@ def _hook(db: Path, tag: str | None) -> None:
     if sys.stdin is None or sys.stdin.isatty():
         raise ValueError("expected a Claude Code hook payload on stdin")
     try:
-        payload = json.loads(sys.stdin.read())
-    except json.JSONDecodeError as e:
+        # Bytes, not text: json detects UTF-8 itself, while text stdin uses the locale
+        # encoding (a code page on Windows) and would garble non-ASCII transcript paths.
+        payload = json.loads(getattr(sys.stdin, "buffer", sys.stdin).read())
+    except (json.JSONDecodeError, UnicodeDecodeError) as e:
         raise ValueError(f"hook payload on stdin is not JSON ({e})") from None
     path = payload.get("transcript_path") if isinstance(payload, dict) else None
     if not isinstance(path, str) or not path:
@@ -131,7 +138,8 @@ def main(argv: list[str] | None = None) -> int:
         try:
             _hook(args.db, args.tag)
         except Exception as e:  # a hook must never fail the Claude Code session
-            print(f"asktrace hook: {e}", file=sys.stderr)
+            if sys.stderr is not None:  # print(file=None) would fall back to stdout
+                print(f"asktrace hook: {e}", file=sys.stderr)
         return 0
     with Store(args.db) as store:
         if args.cmd == "ingest":

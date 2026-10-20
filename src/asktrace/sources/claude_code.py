@@ -43,28 +43,34 @@ class ClaudeCodeSource(Source):
 
     def _read_file(self, file: Path) -> Iterator[Question]:
         turn = 0
-        with file.open(encoding="utf-8") as fh:
+        # A live session's transcript can end in a half-written line, possibly cut inside a
+        # multi-byte character. Skip bad lines instead of losing the whole file.
+        with file.open(encoding="utf-8", errors="replace") as fh:
             for line in fh:
                 try:
                     rec = json.loads(line)
                 except json.JSONDecodeError:
                     continue
+                if not isinstance(rec, dict):
+                    continue
                 if rec.get("type") != "user" or rec.get("isMeta"):
                     continue
                 if rec.get("userType") not in (None, "external"):
                     continue
-                text = _text_of(rec.get("message", {}).get("content"))
+                msg = rec.get("message")
+                text = _text_of(msg.get("content") if isinstance(msg, dict) else None)
                 if text is None:
                     continue
                 turn += 1
                 if not looks_like_question(text):
                     continue
-                ts = rec.get("timestamp")
-                if not ts:
+                try:
+                    asked_at = datetime.fromisoformat(rec["timestamp"].replace("Z", "+00:00"))
+                except (KeyError, AttributeError, ValueError):
                     continue
                 yield Question(
                     text=text.strip(),
-                    asked_at=datetime.fromisoformat(ts.replace("Z", "+00:00")),
+                    asked_at=asked_at,
                     source=self.name,
                     session_id=rec.get("sessionId") or file.stem,
                     turn_index=turn,

@@ -83,7 +83,9 @@ asktrace does not edit these files for you:
 ```
 
 - `asktrace` has to be on the `PATH` Claude Code sees. If it is not, use the full path
-  from `which asktrace`.
+  from `which asktrace`. The same goes for `ASKTRACE_DB`: Claude Code started from the
+  desktop app or an IDE may not see variables set in your shell profile, so a custom
+  database belongs in the command itself (`asktrace --db ~/notes/asktrace.db hook`).
 - SessionEnd hooks share a 1.5-second budget unless a hook sets its own `timeout`, so the
   snippet sets 10 seconds. Ingesting one transcript usually takes well under a second.
 - The hook always exits 0 and prints nothing on success. Errors go to stderr only, so a

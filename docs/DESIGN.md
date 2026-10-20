@@ -27,8 +27,9 @@ hook. It reads `transcript_path` from the hook payload on stdin and nothing else
 follow from running inside someone else's session:
 
 - It must not be able to hurt the session. It always exits 0 (a non-zero exit shows as a
-  hook error, and on a `Stop` hook exit 2 would keep Claude going), never writes to stdout,
-  and reports problems on stderr. Even an argument typo in settings.json exits 0.
+  hook error, and on a `Stop` hook exit 2 would keep Claude going), prints nothing to
+  stdout, and reports problems on stderr. Even an argument typo in settings.json exits 0,
+  and a half-written transcript line is skipped rather than failing the whole session.
 - It does not call a model. Tagging through `claude -p` from a hook would start a second
   Claude Code process while the first is shutting down, inside a 1.5-second default budget.
   Tagging stays a separate, explicit step; `--tag heuristic` is the offline opt-in.
