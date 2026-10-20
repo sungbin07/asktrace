@@ -42,9 +42,12 @@ strong evidence you already hold depths 1-3 of it.
   agent review loop produced a dozen same-day asks about one concept, which is iteration,
   not forgetting. Three "how do I mount a docker volume" questions a month apart is the clearest
   signal that something did not stick.
-- **Mastery per concept** (0-1): `depth/5 × spacing bonus × recency decay`. Revisiting on
-  separate days (spaced repetition) earns up to +50%; a 90-day half-life discounts stale
-  knowledge to a floor of 0.3 rather than zero.
+- **Mastery per concept** (0-1): `depth/5 × (1 − 0.5^days) × recency decay`, where `days`
+  is the number of distinct days you asked about the concept. One question, however deep,
+  is only half the evidence (1 day → 0.5, 2 → 0.75, 3 → 0.875). An earlier version let a
+  single depth-5 question score 1.0, so on real data the top of the table was whatever you
+  asked once today. A 90-day half-life discounts stale knowledge to a floor of 0.3 rather
+  than zero.
 - **Accumulated knowledge**: the sum of mastery over all concepts. Watch its slope, not its
   absolute value.
 

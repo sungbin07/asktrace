@@ -56,9 +56,19 @@ def test_same_day_repeats_are_not_forgetting():
     assert s.re_ask_rate == 0.0 and s.shallow_repeats == []
 
 
+def test_single_deep_question_is_not_full_mastery():
+    assert metrics.mastery_score(5, 1, 0) == 0.5
+    assert metrics.mastery_score(1, 1, 0) == 0.1
+    # Returning on more days earns more, approaching but never reaching 1.0.
+    scores = [metrics.mastery_score(5, d, 0) for d in (1, 2, 3, 5)]
+    assert scores == sorted(scores) and scores[1] == 0.75 and scores[2] == 0.875
+    assert scores[-1] < 1.0
+    # Sustained shallower engagement can match a one-off deep question.
+    assert metrics.mastery_score(3, 3, 0) > metrics.mastery_score(5, 1, 0)
+
+
 def test_mastery_decays_but_keeps_floor():
     fresh = metrics.mastery_score(5, 3, 0)
     old = metrics.mastery_score(5, 3, 365)
-    assert fresh == 1.0
-    assert 0.3 <= old < 0.4
-    assert metrics.mastery_score(1, 1, 0) == 0.2
+    assert old < fresh
+    assert old >= round(0.3 * fresh, 4) - 1e-4

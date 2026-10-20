@@ -79,7 +79,8 @@ From those, per concept and per week:
 - **Acquisition**: concepts you asked about for the first time.
 - **Deepening**: revisited concepts whose questions got deeper over time.
 - **Forgetting signal**: concepts you re-asked at the same or lower depth.
-- **Mastery** (0-1): depth reached × spaced-revisit bonus × 90-day recency decay.
+- **Mastery** (0-1): depth reached × evidence from separate days × 90-day recency decay.
+  One deep question earns half; coming back on other days earns the rest.
 - **Accumulated knowledge**: Σ mastery. Watch the slope.
 
 The reasoning behind each number is in [docs/DESIGN.md](docs/DESIGN.md). They are

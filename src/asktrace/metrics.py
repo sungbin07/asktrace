@@ -59,16 +59,18 @@ class Summary:
 
 
 def mastery_score(max_depth: int, distinct_days: int, days_since_last: float) -> float:
-    """Depth you reached, spread over time, decayed by how long ago you last touched it.
+    """Depth reached × evidence from separate days × recency decay.
 
     - depth: 1 -> 0.2 ... 5 -> 1.0
-    - spacing: revisiting on 3+ distinct days saturates at +50%
+    - evidence: 1 - 0.5**days, so 1 day -> 0.5, 2 -> 0.75, 3 -> 0.875, approaching 1.
+      One question, however deep, is half the evidence; coming back on other days
+      earns the rest. This keeps a single deep question from scoring full mastery.
     - decay: half-life 90 days, floor at 0.3 so old knowledge is discounted, not erased
     """
     depth_part = max_depth / 5.0
-    spacing_part = 1.0 + 0.5 * min(distinct_days - 1, 2) / 2
+    evidence_part = 1.0 - math.pow(0.5, max(1, distinct_days))
     decay = 0.3 + 0.7 * math.pow(0.5, days_since_last / 90.0)
-    return round(min(1.0, depth_part * spacing_part) * decay, 4)
+    return round(depth_part * evidence_part * decay, 4)
 
 
 def _week_start(dt: datetime) -> str:
