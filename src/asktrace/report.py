@@ -21,11 +21,14 @@ def to_markdown(summary: Summary) -> str:
         "",
         f"Period: {s.period[0]} → {s.period[1]}",
         "",
+        "These scores describe question patterns, not demonstrated understanding.",
+        "Re-asking can reflect practice, delegation, or a different context.",
+        "",
         "| Metric | Value |",
         "|---|---|",
         f"| Questions | {s.questions} |",
         f"| Distinct concepts | {s.concepts} |",
-        f"| Accumulated knowledge (Σ mastery) | {s.accumulated_knowledge} |",
+        f"| Exploration score (heuristic) | {s.accumulated_knowledge} |",
         f"| New concepts / active week | {s.acquisition_rate_per_week} |",
         f"| Re-ask rate (no deeper) | {s.re_ask_rate:.1%} |",
         f"| Deepening rate (revisits that went deeper) | {s.deepening_rate:.1%} |",
@@ -49,9 +52,9 @@ def to_markdown(summary: Summary) -> str:
     ]
     lines += [
         "",
-        "## Strongest concepts",
+        "## Most explored concepts",
         "",
-        "| Concept | Domain | Asks | Max depth | Days | Mastery |",
+        "| Concept | Domain | Asks | Max depth | Days | Exploration score |",
         "|---|---|---|---|---|---|",
     ]
     lines += [
@@ -62,7 +65,7 @@ def to_markdown(summary: Summary) -> str:
     if s.shallow_repeats:
         lines += [
             "",
-            "## Asked again without going deeper (forgetting signal)",
+            "## Revisited at the same or lower question depth",
             "",
             "| Concept | Asks | Shallow re-asks | Max depth |",
             "|---|---|---|---|",

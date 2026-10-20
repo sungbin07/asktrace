@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "asktrace"
 version = "0.1.0"
-description = "Measure how your knowledge accumulates from the questions you ask LLMs."
+description = "Trace your AI questions and reflect on how your thinking develops."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"

@@ -1,25 +1,25 @@
 # asktrace
 
-**Measure how your knowledge accumulates from the questions you ask LLMs.**
+**Trace what you explore with AI, and reflect on how your thinking develops.**
 
 You ask Claude, ChatGPT, Claude Code or Codex dozens of questions a day. asktrace reads those
-transcripts, tags every question with the concepts it touches and how deep it goes, and
-tells you what you are learning, what is sticking, and what you keep asking again.
+transcripts, groups your questions into journeys, and lets you record what you checked
+and what remains open. Concept tags and activity graphs help you revisit those records.
+Question patterns are clues for reflection, not proof of understanding or forgetting.
 
-```
-| Metric                                     | Value |
-|--------------------------------------------|-------|
-| Questions                                  | 412   |
-| Distinct concepts                          | 187   |
-| Accumulated knowledge (Σ mastery)          | 96.4  |
-| New concepts / active week                 | 14.4  |
-| Re-ask rate (no deeper)                    | 21.3% |
-| Deepening rate (revisits that went deeper) | 58.0% |
+For example, revisit the questions in one investigation:
 
-## Asked again without going deeper (forgetting signal)
-| Concept              | Asks | Shallow re-asks | Max depth |
-| docker volume mount  | 3    | 2               | 2         |
-```
+> How do I add a cache? → Is the database actually the bottleneck? →
+> How can I measure time spent waiting for the external API?
+
+Then write your own reflection:
+
+> **Wanted to understand:** whether caching would help.
+> **Checked:** the database has not been established as the cause; measure latency first.
+> **Still open:** what happens under concurrent requests?
+
+This is an illustrative, user-written reflection. asktrace preserves the questions and
+your notes; it does not infer that you have learned something from asking about it.
 
 Works offline with a heuristic tagger. For canonical concept names across languages and
 phrasings, tag with Claude: through the Claude Code CLI on a Pro/Max subscription, or through
@@ -60,7 +60,73 @@ Try it on the bundled sample without touching your own data:
 asktrace --db /tmp/demo.db ingest jsonl examples/sample_questions.jsonl
 asktrace --db /tmp/demo.db tag
 asktrace --db /tmp/demo.db report
+asktrace --db /tmp/demo.db journey list
+asktrace --db /tmp/demo.db grass --format html --end 2026-10-20 --out /tmp/demo.html
 ```
+
+## Follow a question journey
+
+Journeys work before tagging, offline and without a model. Start with the questions in
+each source/session, then adjust those groups to match what you were investigating:
+
+```bash
+asktrace journey list
+asktrace journey list --date 2026-09-02 --timezone Asia/Seoul
+asktrace journey show JOURNEY_ID
+```
+
+Replace `JOURNEY_ID` with an ID from `journey list`. `show` displays the questions in time
+order, including their IDs. A session group is only a starting point: asktrace does not
+assume that every question in a session shares a goal. Inputs without a session ID start
+as separate journeys.
+
+Use the question IDs from `show` to split a topic out or combine related questions:
+
+```bash
+asktrace journey split JOURNEY_ID --title "Measure the bottleneck" --questions QUESTION_ID
+asktrace journey group --title "Understand caching" --questions QUESTION_ID_1 QUESTION_ID_2
+asktrace journey group --into JOURNEY_ID --questions QUESTION_ID
+```
+
+Each question belongs to one journey. Grouping changes neither the question IDs nor the
+tags and scores. Re-ingesting does not undo your moves. New turns join their original
+session's journey; you can move them later. A split must leave at least one question in
+the original journey.
+
+### Save your own reflection
+
+```bash
+asktrace review JOURNEY_ID \
+  --goal "Find out whether caching would help" \
+  --learned "Measured latency; most waiting was in the external API" \
+  --open-question "What happens under concurrent requests?"
+asktrace review JOURNEY_ID
+```
+
+The three fields describe what you wanted to understand, what you checked or understood,
+and what you still want to ask. They are your own account, not an AI assessment. Omitted
+fields stay unchanged; use `--open-question ""` to clear one. Moving questions keeps notes
+on their original journey, even if it becomes empty, so a merge cannot discard a reflection.
+Use `--format json` with `journey list`, `journey show`, or `review` for structured output.
+
+### Open a day's questions from the grass
+
+```bash
+asktrace grass --format html --out /tmp/asktrace-journeys.html --timezone Asia/Seoul
+```
+
+Open the generated file in your browser. Select a linked day to read its question journeys
+and reflections. Untagged and repeated questions remain available even when they add no
+colour; an outlined square indicates a recorded day with no scored activity.
+
+**This HTML is a private snapshot containing question text and reflections.** It has no
+server, scripts or external assets. Save changes through the CLI and regenerate the file.
+The default SVG remains the sharing format with dates and counts only. `--timezone`
+uses the same calendar in `journey list --date` and `grass`; omitting it uses system local
+time. `--end` and `--weeks` set the exported window.
+The window filters question dates; each included journey shows its full current reflection,
+which can refer to work outside that window. Journeys with no remaining questions are
+available through `journey list` and `review`, rather than on a calendar day.
 
 ## Run it automatically in Claude Code
 
@@ -104,7 +170,7 @@ asktrace does not edit these files for you:
 
 ## Knowledge grass
 
-A GitHub-style contribution graph of what you learned, one square per day:
+A GitHub-style contribution graph of recorded concept exploration, one square per day:
 
 ```bash
 asktrace grass --out grass.svg                     # last 52 weeks, light theme
@@ -115,7 +181,8 @@ asktrace grass --end 2026-06-30 --out h1.svg      # a window ending on another d
 
 ![asktrace knowledge grass for the bundled sample questions](docs/grass-example.svg)
 
-A square's shade is the day's **learning events**, not its question count:
+A square's shade counts the day's **first-seen concepts and deeper asks** (called
+“learning events” in the SVG). These are question-pattern signals, not confirmed learning:
 
 - +1 for each concept you asked about for the first time
 - +1 for each concept you asked about at a deeper level than ever before
@@ -189,22 +256,27 @@ Each question gets **concepts** (e.g. `prompt caching`, `git rebase`), a **domai
 
 From those, per concept and per week:
 
-- **Acquisition**: concepts you asked about for the first time.
+- **Acquisition**: concepts appearing for the first time in the imported record.
 - **Deepening**: revisited concepts whose questions got deeper over time.
-- **Forgetting signal**: concepts you re-asked at the same or lower depth.
-- **Mastery** (0-1): depth reached × evidence from separate days × 90-day recency decay.
-  One deep question earns half; coming back on other days earns the rest.
-- **Accumulated knowledge**: Σ mastery. Watch the slope.
+- **Re-ask rate**: revisits at the same or lower question depth. Repetition can reflect
+  practice, delegation, a different context, or an unresolved problem.
+- **Exploration score** (0-1 per concept): question depth × appearances on separate days ×
+  90-day recency decay. This describes the record, not demonstrated mastery.
+- **Total exploration score**: the sum of per-concept scores. JSON retains the existing
+  `mastery` and `accumulated_knowledge` keys for compatibility; their interpretation is
+  the same heuristic described here.
 
 The reasoning behind each number is in [docs/DESIGN.md](docs/DESIGN.md). They are
 heuristics about what you *asked*, not a test of what you know.
 
 ## Privacy
 
-Everything stays on your machine in one SQLite file (`~/.asktrace/asktrace.db`, or
-`--db` / `ASKTRACE_DB`). Question text leaves your machine only when you choose a
-Claude-backed tagger (`--tagger claude-code` or `--tagger claude`). The `grass` SVG holds
-only dates and counts, so it is the one output meant to be shared.
+Questions, grouping choices and reflections stay in one local SQLite file
+(`~/.asktrace/asktrace.db`, or `--db` / `ASKTRACE_DB`). Choosing a Claude-backed tagger sends
+question text to that model. Journey grouping, reflections and HTML export do not call
+a model. The `grass` SVG contains only dates and counts. Journey output and HTML include
+private text; keep those files local. Dates and activity counts can themselves reveal
+patterns, so review the range before sharing a graph.
 
 ## Development
 
