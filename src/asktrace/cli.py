@@ -28,9 +28,13 @@ def _parser() -> argparse.ArgumentParser:
     )
 
     tag = sub.add_parser("tag", help="tag untagged questions with concepts, domain and depth")
-    tag.add_argument("--tagger", choices=["heuristic", "claude"], default="heuristic")
     tag.add_argument(
-        "--model", help="model id for --tagger claude (default $ASKTRACE_MODEL or claude-opus-5-5)"
+        "--tagger", choices=["heuristic", "claude", "claude-code"], default="heuristic"
+    )
+    tag.add_argument(
+        "--model",
+        help="model for the model-backed taggers (claude: default $ASKTRACE_MODEL or"
+        " claude-opus-5-5; claude-code: your Claude Code default, or e.g. sonnet)",
     )
     tag.add_argument("--limit", type=int, help="tag at most N questions this run")
 
@@ -57,9 +61,16 @@ def main(argv: list[str] | None = None) -> int:
                 print("nothing to tag")
                 return 0
             tagger = get_tagger(args.tagger, model=args.model)
-            tags = tagger.tag([(r["id"], r["text"]) for r in rows])
-            store.add_tags(tags)
-            print(f"tagged {len(tags)}/{len(rows)} with {tagger.name}")
+            items = [(r["id"], r["text"]) for r in rows]
+            step = getattr(tagger, "batch_size", len(items)) or len(items)
+            done = 0
+            # Save after every batch so a failure late in a long run keeps earlier work.
+            for start in range(0, len(items), step):
+                tags = tagger.tag(items[start : start + step])
+                store.add_tags(tags)
+                done += len(tags)
+                print(f"  {min(start + step, len(items))}/{len(items)}", file=sys.stderr)
+            print(f"tagged {done}/{len(rows)} with {tagger.name}")
         elif args.cmd == "report":
             since = (
                 datetime.fromisoformat(args.since).replace(tzinfo=timezone.utc)

@@ -11,7 +11,11 @@ def get_tagger(name: str, model: str | None = None) -> Tagger:
         from .claude import ClaudeTagger  # optional dependency
 
         return ClaudeTagger(model=model) if model else ClaudeTagger()
-    raise ValueError(f"unknown tagger: {name!r} (expected 'heuristic' or 'claude')")
+    if name == "claude-code":
+        from .claude_code import ClaudeCodeTagger
+
+        return ClaudeCodeTagger(model=model)
+    raise ValueError(f"unknown tagger: {name!r} (expected 'heuristic', 'claude' or 'claude-code')")
 
 
 __all__ = ["Tagger", "HeuristicTagger", "get_tagger"]

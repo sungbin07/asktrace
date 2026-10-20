@@ -21,8 +21,9 @@ tells you what you are learning, what is sticking, and what you keep asking agai
 | docker volume mount  | 3    | 2               | 2         |
 ```
 
-Works offline with a heuristic tagger. Add an Anthropic API key and the Claude tagger gives
-canonical concept names across languages and phrasings.
+Works offline with a heuristic tagger. For canonical concept names across languages and
+phrasings, tag with Claude: through the Claude Code CLI on a Pro/Max subscription, or through
+the API with a key.
 
 ## Install
 
@@ -43,8 +44,9 @@ asktrace ingest chatgpt-export conversations.json
 asktrace ingest jsonl my_questions.jsonl         # {"text": ..., "asked_at": "ISO8601"}
 
 # 2. Tag them
-asktrace tag                                     # offline
-asktrace tag --tagger claude                     # ANTHROPIC_API_KEY or `ant auth login`
+asktrace tag                                     # offline heuristic
+asktrace tag --tagger claude-code                # Claude subscription via `claude -p`, no API key
+asktrace tag --tagger claude                     # Anthropic API (ANTHROPIC_API_KEY)
 
 # 3. Look
 asktrace report
@@ -86,8 +88,8 @@ heuristics about what you *asked*, not a test of what you know.
 ## Privacy
 
 Everything stays on your machine in one SQLite file (`~/.asktrace/asktrace.db`, or
-`--db` / `ASKTRACE_DB`). Only the Claude tagger sends question text anywhere, and only when
-you run `asktrace tag --tagger claude`.
+`--db` / `ASKTRACE_DB`). Question text leaves your machine only when you choose a
+Claude-backed tagger (`--tagger claude-code` or `--tagger claude`).
 
 ## Development
 
