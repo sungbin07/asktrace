@@ -8,7 +8,7 @@ import sys
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import __version__, metrics, report
+from . import __version__, grass, metrics, report
 from .sources import SOURCES
 from .store import DEFAULT_DB, Store
 from .tagger import get_tagger
@@ -44,6 +44,17 @@ def _parser() -> argparse.ArgumentParser:
     rep.add_argument("--since", help="ISO date, e.g. 2026-01-01")
     rep.add_argument("--top", type=int, default=20)
 
+    gr = sub.add_parser(
+        "grass",
+        help="draw learning events per day as a contribution-graph SVG",
+        description="Write a GitHub-contribution-style SVG. A day's shade is its learning"
+        " events (concepts asked for the first time plus asks deeper than before), not its"
+        " question count. The SVG contains dates and counts only.",
+    )
+    gr.add_argument("--out", type=Path, help="SVG file to write (default: stdout)")
+    gr.add_argument("--weeks", type=_positive_int, default=52, help="columns (default 52)")
+    gr.add_argument("--theme", choices=sorted(grass.THEMES), default="light")
+
     sub.add_parser("stats", help="how many questions are stored and tagged")
 
     hk = sub.add_parser(
@@ -60,6 +71,13 @@ def _parser() -> argparse.ArgumentParser:
         " run `asktrace tag` later)",
     )
     return p
+
+
+def _positive_int(value: str) -> int:
+    n = int(value)
+    if n < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return n
 
 
 def _is_hook_call(argv: list[str]) -> bool:
@@ -145,6 +163,26 @@ def main(argv: list[str] | None = None) -> int:
             )
             summary = metrics.compute(store.tagged_questions(since=since), top_n=args.top)
             print(report.to_json(summary) if args.format == "json" else report.to_markdown(summary))
+        elif args.cmd == "grass":
+            # Days follow your local calendar, like the graph on a GitHub profile.
+            days = metrics.learning_events_by_day(store.tagged_questions(), tz=None)
+            end = datetime.now().astimezone().date()
+            svg = grass.render(days, end=end, weeks=args.weeks, theme=args.theme)
+            untagged = store.count_questions() - store.count_tagged()
+            if untagged:
+                print(
+                    f"note: {untagged} untagged questions are not drawn; run `asktrace tag`",
+                    file=sys.stderr,
+                )
+            if args.out:
+                args.out.write_text(svg, encoding="utf-8")
+                tot = grass.totals(days, *grass.window(end, args.weeks))
+                print(
+                    f"wrote {args.out}: {tot['events']} learning events on"
+                    f" {tot['active_days']} days in the last {args.weeks} weeks"
+                )
+            else:
+                sys.stdout.write(svg)
         elif args.cmd == "stats":
             nq, nt = store.count_questions(), store.count_tagged()
             print(f"questions: {nq}  tagged: {nt}  db: {store.path}")

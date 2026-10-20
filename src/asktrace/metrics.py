@@ -7,9 +7,9 @@ claim a ground-truth measure of what someone knows. See docs/DESIGN.md for the r
 from __future__ import annotations
 
 import math
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import asdict, dataclass, field
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone, tzinfo
 
 
 @dataclass
@@ -176,3 +176,39 @@ def compute(rows: list[dict], now: datetime | None = None, top_n: int = 20) -> S
         top_concepts=concept_stats[:top_n],
         shallow_repeats=shallow[:top_n],
     )
+
+
+@dataclass(frozen=True)
+class DayLearning:
+    new_concepts: int = 0  # concepts asked about for the first time
+    deeper: int = 0  # asks deeper than anything asked before about that concept
+
+    @property
+    def events(self) -> int:
+        return self.new_concepts + self.deeper
+
+
+def learning_events_by_day(
+    rows: list[dict], tz: tzinfo | None = timezone.utc
+) -> dict[date, DayLearning]:
+    """Learning events per day: first asks of a concept plus asks that beat its max depth.
+
+    Repeats at the same or a lower depth add nothing, so splitting one question into five
+    does not make a day count more. Each concept can contribute at most five events ever
+    (its first ask plus each deeper level up to 5). `tz=None` buckets days in the system's
+    local time zone.
+    """
+    max_depth: dict[str, int] = {}
+    new: Counter[date] = Counter()
+    deeper: Counter[date] = Counter()
+    for r in sorted(rows, key=lambda r: (r["asked_at"], r["depth"])):
+        day = r["asked_at"].astimezone(tz).date()
+        for c in r["concepts"]:
+            if c not in max_depth:
+                new[day] += 1
+            elif r["depth"] > max_depth[c]:
+                deeper[day] += 1
+            else:
+                continue
+            max_depth[c] = r["depth"]
+    return {d: DayLearning(new[d], deeper[d]) for d in sorted(new.keys() | deeper.keys())}

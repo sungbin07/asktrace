@@ -14,6 +14,7 @@ export (Claude Code / claude.ai / ChatGPT / JSONL)
    → Tag{concepts[], domain, depth 1-5, type}        tagger/
    → ConceptStats + WeekStats + Summary              metrics.py
    → Markdown / JSON                                 report.py
+   → learning events per day → SVG                   metrics.py, grass.py
 ```
 
 Everything lands in one SQLite file. Ingest is idempotent (fingerprint = source + session +
@@ -64,6 +65,45 @@ strong evidence you already hold depths 1-3 of it.
 - **Accumulated knowledge**: the sum of mastery over all concepts. Watch its slope, not its
   absolute value.
 
+## Knowledge grass
+
+`asktrace grass` borrows the GitHub contribution graph, which Korean developers call 잔디
+(grass); "planting grass" means keeping it green every day. That habit has a known failure:
+because the graph counts commits, people keep it green with typo fixes and empty commits.
+A graph of questions asked would fail the same way, and worse: splitting one question into
+five, or asking the same thing again, would earn a darker square.
+
+So a day's value is its **learning events**, the per-day version of acquisition and
+deepening above:
+
+- +1 for each concept asked about for the first time ever;
+- +1 for each concept asked about deeper than its previous maximum depth (same-day counts:
+  going from "what is X" to "why does X fail" in one session is learning);
+- 0 for asks at the same or a lower depth. Not negative: re-asking is a rational choice
+  (see below), and a graph that subtracts would punish asking.
+
+The only way to make a day greener is to touch something new or go further than before.
+Each concept is worth at most five events in its lifetime: its first ask plus each deeper
+level up to 5.
+
+Choices behind the picture:
+
+- **Fixed shades** (1-4, 5-9, 10-19, 20+ events), not scaled to your busiest day as GitHub
+  does. With relative scaling a quiet month makes small days look dark; fixed thresholds
+  keep a shade meaning the same thing all year. With a model tagger a question usually
+  carries two or three concepts, so level 1 is one or two questions that opened something
+  and level 4 is a day of real exploration. The scale depends on the tagger: heuristic
+  concepts are surface tokens, so heuristic-tagged grass runs darker.
+- **Local days**. The graph is a calendar the user reads, so days follow the local time zone
+  (the other metrics bucket in UTC). A Seoul morning question lands on that morning's
+  square, not the previous day's.
+- **Start-up bias**. The first weeks after you start look greener, because every concept is
+  new to the log even if it is not new to you.
+- **Privacy**. The SVG carries dates and counts only. Real concept names include internal
+  project names, so no concept, domain or question text is written, and a test checks it.
+  Sharing is a manual commit of the generated file; there is deliberately no GitHub Action,
+  which would need your transcripts or database in CI.
+
 ## What this is not
 
 - Not a test of what you know. It measures what you *asked*, which is a proxy. Someone who
@@ -84,6 +124,14 @@ strong evidence you already hold depths 1-3 of it.
 
 ## Roadmap
 
+Done:
+
+- [x] Run automatically inside Claude Code (`asktrace hook` for a SessionEnd hook)
+- [x] Shareable daily view: knowledge grass SVG of learning events (`asktrace grass`)
+
+Next:
+
+- [ ] Re-tag questions a hook tagged offline (`asktrace tag --retag heuristic`)
 - [ ] Local HTML dashboard with the weekly timeline and a concept map
 - [ ] Concept aliasing / merging (`asktrace merge "sqlite wal" "wal mode"`)
 - [ ] Spaced-repetition prompts: "you asked about X three times, want a 5-question quiz?"

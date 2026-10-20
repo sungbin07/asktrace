@@ -99,6 +99,53 @@ asktrace does not edit these files for you:
   asynchronously, so the last message of a session can be missing when the hook runs;
   `asktrace ingest claude-code` picks up anything a hook missed.
 
+## Knowledge grass
+
+A GitHub-style contribution graph of what you learned, one square per day:
+
+```bash
+asktrace grass --out grass.svg                     # last 52 weeks, light theme
+asktrace grass --out grass-dark.svg --theme dark
+asktrace grass --weeks 26 > grass.svg              # no --out: SVG on stdout
+```
+
+![asktrace knowledge grass for the bundled sample questions](docs/grass-example.svg)
+
+A square's shade is the day's **learning events**, not its question count:
+
+- +1 for each concept you asked about for the first time
+- +1 for each concept you asked about at a deeper level than ever before
+  (define → apply → reason → debug → design)
+- 0 for asking about a concept again at the same or a lower depth, however many times
+
+Splitting one question into five, or asking the same docker question every month, does not
+make a day greener. A concept is worth at most five events in total. The shades are fixed:
+1-4, 5-9, 10-19 and 20+ events. Days follow your local time zone, and only tagged questions
+are drawn, so run `asktrace tag` first. The example above is the bundled sample tagged
+with the offline heuristic tagger.
+
+The SVG contains dates and counts only: no concept names, domains or question text.
+
+### Put it on your GitHub profile
+
+Your profile README lives in the repository named after your username. Write both themes
+into a clone of it and let GitHub pick the one that matches the viewer:
+
+```bash
+asktrace grass --out ~/src/<username>/asktrace-grass.svg
+asktrace grass --out ~/src/<username>/asktrace-grass-dark.svg --theme dark
+```
+
+```html
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="asktrace-grass-dark.svg">
+  <img alt="Learning events per day, from asktrace" src="asktrace-grass.svg">
+</picture>
+```
+
+Commit both SVGs and push. The graph changes only when you regenerate and push again;
+nothing reads your database except asktrace on your own machine.
+
 ## What it measures
 
 Each question gets **concepts** (e.g. `prompt caching`, `git rebase`), a **domain**, and a
@@ -128,7 +175,8 @@ heuristics about what you *asked*, not a test of what you know.
 
 Everything stays on your machine in one SQLite file (`~/.asktrace/asktrace.db`, or
 `--db` / `ASKTRACE_DB`). Question text leaves your machine only when you choose a
-Claude-backed tagger (`--tagger claude-code` or `--tagger claude`).
+Claude-backed tagger (`--tagger claude-code` or `--tagger claude`). The `grass` SVG holds
+only dates and counts, so it is the one output meant to be shared.
 
 ## Development
 
