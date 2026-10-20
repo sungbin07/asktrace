@@ -1,0 +1,10 @@
+{"timestamp":"2026-09-01T08:59:00Z","type":"session_meta","payload":{"id":"codex-demo","cwd":"/example/project","source":"cli"}}
+{"timestamp":"2026-09-01T08:59:01Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"# AGENTS.md instructions for /example/project\nUse Python."}]}}
+{"timestamp":"2026-09-01T09:00:00Z","type":"event_msg","payload":{"type":"user_message","message":"git rebase와 merge 차이가 뭐야?","images":[]}}
+{"timestamp":"2026-09-01T09:00:00Z","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"git rebase와 merge 차이가 뭐야?"}]}}
+{"timestamp":"2026-09-01T09:00:01Z","type":"event_msg","payload":{"type":"agent_message","message":"Here is how to compare git rebase and merge."}}
+{"timestamp":"2026-09-01T09:00:02Z","type":"response_item","payload":{"type":"function_call_output","output":"git status output"}}
+{"timestamp":"2026-09-01T09:01:00Z","type":"event_msg","payload":{"type":"user_message","message":"/compact"}}
+{"timestamp":"2026-09-01T09:02:00Z","type":"event_msg","payload":{"type":"user_message","message":"ok"}}
+{"timestamp":"2026-09-02T10:00:00+09:00","type":"event_msg","payload":{"type":"user_message","message":"git rebase 하다가 conflict 났는데 이어서 하는 방법 알려줘"}}
+{"timestamp":"2026-09-02T10:00:00+09:00","type":"response_item","payload":{"type":"message","role":"user","content":[{"type":"input_text","text":"git rebase 하다가 conflict 났는데 이어서 하는 방법 알려줘"}]}}

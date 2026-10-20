@@ -2,7 +2,7 @@
 
 **Measure how your knowledge accumulates from the questions you ask LLMs.**
 
-You ask Claude, ChatGPT or Claude Code dozens of questions a day. asktrace reads those
+You ask Claude, ChatGPT, Claude Code or Codex dozens of questions a day. asktrace reads those
 transcripts, tags every question with the concepts it touches and how deep it goes, and
 tells you what you are learning, what is sticking, and what you keep asking again.
 
@@ -39,6 +39,7 @@ Or from source: `uv sync --extra dev`.
 ```bash
 # 1. Pull your questions in (all idempotent; re-run on fresh exports any time)
 asktrace ingest claude-code                      # ~/.claude/projects/**/*.jsonl
+asktrace ingest codex                            # $CODEX_HOME/sessions or ~/.codex/sessions
 asktrace ingest claude-export conversations.json # claude.ai → Settings → Export data
 asktrace ingest chatgpt-export conversations.json
 asktrace ingest jsonl my_questions.jsonl         # {"text": ..., "asked_at": "ISO8601"}
@@ -148,6 +149,30 @@ asktrace grass --out ~/src/<username>/asktrace-grass-dark.svg --theme dark
 
 Commit both SVGs and push. The graph changes only when you regenerate and push again;
 nothing reads your database except asktrace on your own machine.
+
+## Codex local sessions
+
+`asktrace ingest codex` reads local, uncompressed rollout JSONL files recursively.
+You can also select a sessions directory or one rollout file:
+
+```bash
+asktrace ingest codex /path/to/sessions
+asktrace ingest codex /path/to/rollout.jsonl
+asktrace tag
+asktrace report
+```
+
+It imports user-message events from legacy rollouts and completed user-message items
+from paginated rollouts. Mirrored model-input records, assistant replies, tool output,
+and sessions marked as subagent/internal are excluded. Re-importing the same session
+does not duplicate questions. Malformed records, including an incomplete final line,
+are skipped.
+
+Archived sessions are opt-in: pass their `archived_sessions` directory explicitly.
+This reader does not fetch cloud conversations, decode compressed rollouts, or reconstruct
+inherited history from fork/revert references. Raw-response-only exports are not supported.
+No Codex API key or CLI login is needed to read files already on your machine. Codex is
+an input source here; model-backed tagging still uses the existing Claude taggers.
 
 ## What it measures
 

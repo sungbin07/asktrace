@@ -25,7 +25,10 @@ def _parser() -> argparse.ArgumentParser:
     ing = sub.add_parser("ingest", help="read questions from a chat export into the database")
     ing.add_argument("source", choices=sorted(SOURCES))
     ing.add_argument(
-        "path", nargs="?", help="file or directory (claude-code defaults to ~/.claude/projects)"
+        "path",
+        nargs="?",
+        help="file or directory (claude-code: ~/.claude/projects; "
+        "codex: $CODEX_HOME/sessions or ~/.codex/sessions)",
     )
 
     tag = sub.add_parser("tag", help="tag untagged questions with concepts, domain and depth")

@@ -9,7 +9,7 @@ how deep they go, and how they repeat over time.
 ## Pipeline
 
 ```
-export (Claude Code / claude.ai / ChatGPT / JSONL)
+export (Claude Code / Codex / claude.ai / ChatGPT / JSONL)
    → Question{text, asked_at, session_id}            sources/
    → Tag{concepts[], domain, depth 1-5, type}        tagger/
    → ConceptStats + WeekStats + Summary              metrics.py
@@ -33,6 +33,16 @@ follow from running inside someone else's session:
 - It does not call a model. Tagging through `claude -p` from a hook would start a second
   Claude Code process while the first is shutting down, inside a 1.5-second default budget.
   Tagging stays a separate, explicit step; `--tag heuristic` is the offline opt-in.
+
+### Codex local sessions
+
+The Codex reader consumes local rollout `event_msg` records: legacy `user_message` events
+and paginated `item_completed` events whose item is `UserMessage`. It ignores mirrored
+`response_item` records and internal/subagent sessions so model context and delegated
+instructions do not inflate a person's question history. Its synthetic fixtures follow
+the upstream [protocol](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/protocol.rs),
+[turn items](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/items.rs), and
+[persistence policy](https://github.com/openai/codex/blob/main/codex-rs/rollout/src/policy.rs).
 
 ## Depth scale
 
