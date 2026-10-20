@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -44,11 +45,76 @@ def _parser() -> argparse.ArgumentParser:
     rep.add_argument("--top", type=int, default=20)
 
     sub.add_parser("stats", help="how many questions are stored and tagged")
+
+    hk = sub.add_parser(
+        "hook",
+        help="ingest the transcript named in a Claude Code hook payload on stdin",
+        description="Run from a Claude Code SessionEnd hook. Reads the hook JSON from stdin and"
+        " ingests that one transcript. Always exits 0 and prints nothing on success, so a"
+        " failure here cannot disturb the Claude Code session.",
+    )
+    hk.add_argument(
+        "--tag",
+        choices=["heuristic"],
+        help="also tag this session's new questions offline (default: no tagging,"
+        " run `asktrace tag` later)",
+    )
     return p
 
 
+def _is_hook_call(argv: list[str]) -> bool:
+    """True when the subcommand is `hook`, skipping global options before it."""
+    i = 0
+    while i < len(argv):
+        if argv[i] == "--db":
+            i += 2
+        elif argv[i].startswith("-"):
+            i += 1
+        else:
+            return argv[i] == "hook"
+    return False
+
+
+def _hook(db: Path, tag: str | None) -> None:
+    """Ingest the one transcript a Claude Code hook payload points at. Raises on bad input."""
+    if sys.stdin is None or sys.stdin.isatty():
+        raise ValueError("expected a Claude Code hook payload on stdin")
+    try:
+        payload = json.loads(sys.stdin.read())
+    except json.JSONDecodeError as e:
+        raise ValueError(f"hook payload on stdin is not JSON ({e})") from None
+    path = payload.get("transcript_path") if isinstance(payload, dict) else None
+    if not isinstance(path, str) or not path:
+        raise ValueError("hook payload has no transcript_path")
+    transcript = Path(path).expanduser()
+    if not transcript.is_file():  # a directory would make the source read every transcript
+        raise ValueError(f"transcript not found: {transcript}")
+    questions = list(SOURCES["claude-code"](transcript).questions())
+    with Store(db) as store:
+        store.add_questions(questions)
+        if tag:
+            # Only this session's questions: leave the rest of the backlog for `asktrace tag`.
+            ids = {q.fingerprint for q in questions}
+            rows = [r for r in store.untagged() if r["id"] in ids]
+            if rows:
+                store.add_tags(get_tagger(tag).tag([(r["id"], r["text"]) for r in rows]))
+
+
 def main(argv: list[str] | None = None) -> int:
-    args = _parser().parse_args(argv)
+    argv = sys.argv[1:] if argv is None else list(argv)
+    try:
+        args = _parser().parse_args(argv)
+    except SystemExit as e:
+        # A mistyped hook command line must not become a failing hook.
+        if e.code not in (0, None) and _is_hook_call(argv):
+            return 0
+        raise
+    if args.cmd == "hook":
+        try:
+            _hook(args.db, args.tag)
+        except Exception as e:  # a hook must never fail the Claude Code session
+            print(f"asktrace hook: {e}", file=sys.stderr)
+        return 0
     with Store(args.db) as store:
         if args.cmd == "ingest":
             cls = SOURCES[args.source]

@@ -61,6 +61,44 @@ asktrace --db /tmp/demo.db tag
 asktrace --db /tmp/demo.db report
 ```
 
+## Run it automatically in Claude Code
+
+`asktrace hook` reads a [Claude Code hook](https://code.claude.com/docs/en/hooks) payload
+from stdin and ingests the one transcript it names (`transcript_path`). Add a `SessionEnd`
+hook to `~/.claude/settings.json` (all projects) or a project's `.claude/settings.json`;
+asktrace does not edit these files for you:
+
+```json
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "hooks": [
+          { "type": "command", "command": "asktrace hook", "timeout": 10 }
+        ]
+      }
+    ]
+  }
+}
+```
+
+- `asktrace` has to be on the `PATH` Claude Code sees. If it is not, use the full path
+  from `which asktrace`.
+- SessionEnd hooks share a 1.5-second budget unless a hook sets its own `timeout`, so the
+  snippet sets 10 seconds. Ingesting one transcript usually takes well under a second.
+- The hook always exits 0 and prints nothing on success. Errors go to stderr only, so a
+  bad payload or a locked database never turns into a hook error in your session. To debug,
+  run it by hand: `echo '{"transcript_path": "/path/to/session.jsonl"}' | asktrace hook`.
+- The hook does not tag. Tagging with `--tagger claude-code` would launch `claude -p`
+  while Claude Code is shutting down, so run `asktrace tag --tagger claude-code` when you
+  look at your report. `asktrace hook --tag heuristic` tags the session's questions
+  offline instead, but those questions keep heuristic tags: `asktrace tag` only fills in
+  untagged ones.
+- Ingest is idempotent, so the same command also works as a `Stop` hook (after every
+  response). SessionEnd is enough for most people. Claude Code writes the transcript
+  asynchronously, so the last message of a session can be missing when the hook runs;
+  `asktrace ingest claude-code` picks up anything a hook missed.
+
 ## What it measures
 
 Each question gets **concepts** (e.g. `prompt caching`, `git rebase`), a **domain**, and a

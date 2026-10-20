@@ -19,6 +19,19 @@ export (Claude Code / claude.ai / ChatGPT / JSONL)
 Everything lands in one SQLite file. Ingest is idempotent (fingerprint = source + session +
 turn + text), so re-running on a fresh export only adds what is new.
 
+### Inside Claude Code
+
+`asktrace hook` is the ingest step for one session, run from a Claude Code `SessionEnd`
+hook. It reads `transcript_path` from the hook payload on stdin and nothing else. Two rules
+follow from running inside someone else's session:
+
+- It must not be able to hurt the session. It always exits 0 (a non-zero exit shows as a
+  hook error, and on a `Stop` hook exit 2 would keep Claude going), never writes to stdout,
+  and reports problems on stderr. Even an argument typo in settings.json exits 0.
+- It does not call a model. Tagging through `claude -p` from a hook would start a second
+  Claude Code process while the first is shutting down, inside a 1.5-second default budget.
+  Tagging stays a separate, explicit step; `--tag heuristic` is the offline opt-in.
+
 ## Depth scale
 
 | depth | label  | typical question                             |
