@@ -65,7 +65,7 @@ def totals(days: dict[date, DayLearning], start: date, end: date) -> dict[str, i
     }
 
 
-def _plural(n: int, word: str) -> str:
+def plural(n: int, word: str) -> str:
     return f"{n:,} {word}{'' if n == 1 else 's'}"
 
 
@@ -89,10 +89,10 @@ def render(days: dict[date, DayLearning], end: date, weeks: int = 52, theme: str
     width = max(GRID_X + weeks * PITCH - GAP + PAD, MIN_WIDTH)
     grid_bottom = GRID_Y + 7 * PITCH - GAP
     height = grid_bottom + 30
-    events = _plural(tot["events"], "learning event")
+    events = plural(tot["events"], "learning event")
     summary = (
-        f"{events} ({_plural(tot['new_concepts'], 'new concept')},"
-        f" {_plural(tot['deeper'], 'deeper ask')}) on {_plural(tot['active_days'], 'day')},"
+        f"{events} ({plural(tot['new_concepts'], 'new concept')},"
+        f" {plural(tot['deeper'], 'deeper ask')}) on {plural(tot['active_days'], 'day')},"
         f" {start.isoformat()} to {end.isoformat()}"
     )
 
@@ -107,7 +107,7 @@ def render(days: dict[date, DayLearning], end: date, weeks: int = 52, theme: str
         f'<rect width="{width}" height="{height}" rx="6" fill="{t["bg"]}"/>',
         f'<g font-family="{FONT}" font-size="10" fill="{t["muted"]}">',
         f'<text x="{PAD}" y="24" font-size="14" fill="{t["text"]}">'
-        f"{events} in the last {_plural(weeks, 'week')}</text>",
+        f"{events} in the last {plural(weeks, 'week')}</text>",
     ]
     for col, name in _month_labels(start, weeks):
         out.append(f'<text x="{GRID_X + col * PITCH}" y="{GRID_Y - 6}">{name}</text>')
@@ -119,7 +119,7 @@ def render(days: dict[date, DayLearning], end: date, weeks: int = 52, theme: str
         v = days.get(d, DayLearning())
         lv = level(v.events)
         tip = (
-            f"{_plural(v.events, 'learning event')} ({v.new_concepts} new, {v.deeper} deeper)"
+            f"{plural(v.events, 'learning event')} ({v.new_concepts} new, {v.deeper} deeper)"
             if v.events
             else "no learning events"
         )

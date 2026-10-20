@@ -123,7 +123,7 @@ class Store:
     def tagged_questions(self, since: datetime | None = None) -> list[dict]:
         """Join of questions and tags, oldest first. Each dict has parsed `concepts`."""
         sql = (
-            "SELECT q.id, q.source, q.session_id, q.asked_at, q.text,"
+            "SELECT q.id, q.source, q.session_id, q.turn_index, q.asked_at, q.text,"
             " t.concepts, t.domain, t.depth, t.question_type, t.tagger"
             " FROM questions q JOIN tags t ON t.question_id = q.id"
         )
@@ -131,7 +131,7 @@ class Store:
         if since is not None:
             sql += " WHERE q.asked_at >= ?"
             params = (since.isoformat(),)
-        sql += " ORDER BY q.asked_at"
+        sql += " ORDER BY q.asked_at, q.session_id, q.turn_index"
         out = []
         for row in self.conn.execute(sql, params):
             d = dict(row)

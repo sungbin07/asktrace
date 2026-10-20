@@ -109,6 +109,7 @@ A GitHub-style contribution graph of what you learned, one square per day:
 asktrace grass --out grass.svg                     # last 52 weeks, light theme
 asktrace grass --out grass-dark.svg --theme dark
 asktrace grass --weeks 26 > grass.svg              # no --out: SVG on stdout
+asktrace grass --end 2026-06-30 --out h1.svg      # a window ending on another day
 ```
 
 ![asktrace knowledge grass for the bundled sample questions](docs/grass-example.svg)
@@ -124,7 +125,7 @@ Splitting one question into five, or asking the same docker question every month
 make a day greener. A concept is worth at most five events in total. The shades are fixed:
 1-4, 5-9, 10-19 and 20+ events. Days follow your local time zone, and only tagged questions
 are drawn, so run `asktrace tag` first. The example above is the bundled sample tagged
-with the offline heuristic tagger.
+with the offline heuristic tagger, drawn with `--end 2026-10-20`.
 
 The SVG contains dates and counts only: no concept names, domains or question text.
 

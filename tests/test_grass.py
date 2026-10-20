@@ -1,5 +1,8 @@
+import os
 import random
 import re
+import time
+import xml.etree.ElementTree as ET
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -91,6 +94,7 @@ def test_svg_is_deterministic_and_matches_per_day_values():
     svg = grass.render(metrics.learning_events_by_day(ROWS), end=end, weeks=8)
     assert svg == grass.render(metrics.learning_events_by_day(shuffled), end=end, weeks=8)
     assert svg.startswith("<svg ") and svg.endswith("</svg>\n")
+    assert ET.fromstring(svg).tag == "{http://www.w3.org/2000/svg}svg"
 
     cells = dict(re.findall(r'data-date="([\d-]+)" data-level="(\d)"', svg))
     start, _ = grass.window(end, 8)
@@ -144,8 +148,12 @@ def test_cli_grass_writes_svg_without_concepts(tmp_path, capsys):
     assert "3 untagged questions are not drawn" in capsys.readouterr().err
     assert main(["--db", str(db), "tag"]) == 0
     capsys.readouterr()
-    assert main(["--db", str(db), "grass", "--out", str(out), "--weeks", "8"]) == 0
-    assert capsys.readouterr().out.startswith(f"wrote {out}: ")
+    args = ["--db", str(db), "grass", "--out", str(out), "--weeks", "8", "--end", "2026-09-30"]
+    assert main(args) == 0
+    assert (
+        capsys.readouterr().out
+        == f"wrote {out}: 15 learning events on 3 days in the last 8 weeks\n"
+    )
     svg = out.read_text(encoding="utf-8")
     with Store(db) as store:
         rows = store.tagged_questions()
@@ -155,3 +163,60 @@ def test_cli_grass_writes_svg_without_concepts(tmp_path, capsys):
             assert c not in svg
     assert main(["--db", str(db), "grass", "--theme", "dark"]) == 0
     assert capsys.readouterr().out.startswith("<svg ")
+
+
+def test_equal_timestamps_keep_turn_order():
+    t = datetime(2026, 9, 1, 12, tzinfo=timezone.utc)
+
+    def row(turn, depth):
+        return {
+            "asked_at": t,
+            "session_id": "s",
+            "turn_index": turn,
+            "concepts": ["x"],
+            "depth": depth,
+            "domain": "ml",
+            "text": "",
+        }
+
+    # Deep first, then a basic question in the same export second: one event, not two.
+    assert metrics.learning_events_by_day([row(1, 1), row(0, 5)]) == {
+        date(2026, 9, 1): DayLearning(new_concepts=1, deeper=0)
+    }
+    assert metrics.learning_events_by_day([row(1, 5), row(0, 1)]) == {
+        date(2026, 9, 1): DayLearning(new_concepts=1, deeper=1)
+    }
+
+
+def test_month_labels_skip_a_sliver_of_the_first_month():
+    start, _ = grass.window(date(2026, 9, 30), 8)  # Sunday 2026-08-09
+    assert grass._month_labels(start, 8) == [(0, "Aug"), (4, "Sep")]
+    start, _ = grass.window(date(2026, 10, 20), 52)  # Sunday 2025-10-26: one week of Oct
+    assert grass._month_labels(start, 52)[0] == (1, "Nov")
+
+
+def test_window_ending_on_a_sunday_has_one_cell_in_the_last_column():
+    end = date(2026, 10, 18)  # a Sunday
+    svg = grass.render({}, end=end, weeks=3)
+    dates = re.findall(r'data-date="([\d-]+)"', svg)
+    assert len(dates) == 2 * 7 + 1 and dates[-1] == "2026-10-18"
+
+
+@pytest.mark.skipif(not hasattr(time, "tzset"), reason="needs time.tzset")
+def test_local_days_use_the_system_time_zone(monkeypatch):
+    monkeypatch.setenv("TZ", "Asia/Seoul")
+    time.tzset()
+    try:
+        late = [_row(1, ["wal"], 1, hour=23)]  # 08:00 the next day in Seoul
+        assert list(metrics.learning_events_by_day(late, tz=None)) == [date(2026, 9, 2)]
+    finally:
+        monkeypatch.undo()
+        time.tzset()
+    assert os.environ.get("TZ") != "Asia/Seoul"
+
+
+@pytest.mark.parametrize("weeks", ["0", "521", "abc"])
+def test_weeks_must_be_sane(tmp_path, weeks):
+    with pytest.raises(SystemExit) as e:
+        main(["--db", str(tmp_path / "a.db"), "grass", "--weeks", weeks])
+    assert e.value.code == 2

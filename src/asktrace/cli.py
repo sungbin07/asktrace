@@ -5,7 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 from . import __version__, grass, metrics, report
@@ -52,7 +52,12 @@ def _parser() -> argparse.ArgumentParser:
         " question count. The SVG contains dates and counts only.",
     )
     gr.add_argument("--out", type=Path, help="SVG file to write (default: stdout)")
-    gr.add_argument("--weeks", type=_positive_int, default=52, help="columns (default 52)")
+    gr.add_argument("--weeks", type=_weeks, default=52, help="columns, 1-520 (default 52)")
+    gr.add_argument(
+        "--end",
+        type=date.fromisoformat,
+        help="last day drawn, YYYY-MM-DD (default: today in your local time zone)",
+    )
     gr.add_argument("--theme", choices=sorted(grass.THEMES), default="light")
 
     sub.add_parser("stats", help="how many questions are stored and tagged")
@@ -73,10 +78,13 @@ def _parser() -> argparse.ArgumentParser:
     return p
 
 
-def _positive_int(value: str) -> int:
-    n = int(value)
-    if n < 1:
-        raise argparse.ArgumentTypeError("must be at least 1")
+def _weeks(value: str) -> int:
+    try:
+        n = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"not a whole number: {value!r}") from None
+    if not 1 <= n <= 520:
+        raise argparse.ArgumentTypeError("must be between 1 and 520 (ten years)")
     return n
 
 
@@ -174,7 +182,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "grass":
             # Days follow your local calendar, like the graph on a GitHub profile.
             days = metrics.learning_events_by_day(store.tagged_questions(), tz=None)
-            end = datetime.now().astimezone().date()
+            end = args.end or datetime.now().astimezone().date()
             svg = grass.render(days, end=end, weeks=args.weeks, theme=args.theme)
             untagged = store.count_questions() - store.count_tagged()
             if untagged:
@@ -187,7 +195,7 @@ def main(argv: list[str] | None = None) -> int:
                 tot = grass.totals(days, *grass.window(end, args.weeks))
                 print(
                     f"wrote {args.out}: {tot['events']} learning events on"
-                    f" {tot['active_days']} days in the last {args.weeks} weeks"
+                    f" {tot['active_days']} days in the last {grass.plural(args.weeks, 'week')}"
                 )
             else:
                 sys.stdout.write(svg)

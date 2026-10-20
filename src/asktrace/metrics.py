@@ -201,7 +201,12 @@ def learning_events_by_day(
     max_depth: dict[str, int] = {}
     new: Counter[date] = Counter()
     deeper: Counter[date] = Counter()
-    for r in sorted(rows, key=lambda r: (r["asked_at"], r["depth"])):
+    # Equal timestamps happen (exports without per-message times): keep the real turn
+    # order rather than an order that would happen to score more.
+    order = sorted(
+        rows, key=lambda r: (r["asked_at"], r.get("session_id", ""), r.get("turn_index", 0))
+    )
+    for r in order:
         day = r["asked_at"].astimezone(tz).date()
         for c in r["concepts"]:
             if c not in max_depth:
