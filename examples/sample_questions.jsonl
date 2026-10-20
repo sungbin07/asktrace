@@ -1,0 +1,12 @@
+{"text":"prompt caching이 뭐야? 언제 쓰는 거야","asked_at":"2026-08-03T09:00:00Z","session_id":"demo-1"}
+{"text":"system prompt에 cache_control 붙였는데 cache_read_input_tokens가 계속 0이야. 왜?","asked_at":"2026-08-04T11:00:00Z","session_id":"demo-2"}
+{"text":"what is the difference between git rebase and merge","asked_at":"2026-08-05T10:00:00Z","session_id":"demo-3"}
+{"text":"how do I squash the last 3 commits with interactive rebase","asked_at":"2026-08-12T10:00:00Z","session_id":"demo-4"}
+{"text":"git rebase 하다가 conflict 났는데 abort 말고 이어서 하는 방법","asked_at":"2026-08-20T10:00:00Z","session_id":"demo-5"}
+{"text":"sqlite WAL 모드가 뭐야","asked_at":"2026-08-13T10:00:00Z","session_id":"demo-6"}
+{"text":"sqlite WAL 모드랑 journal 모드 차이가 뭐야","asked_at":"2026-08-27T10:00:00Z","session_id":"demo-7"}
+{"text":"docker compose에서 볼륨 마운트 어떻게 해?","asked_at":"2026-09-01T10:00:00Z","session_id":"demo-8"}
+{"text":"docker compose 볼륨 마운트 어떻게 하더라","asked_at":"2026-09-15T10:00:00Z","session_id":"demo-9"}
+{"text":"docker 볼륨 마운트 문법 다시 알려줘","asked_at":"2026-09-29T10:00:00Z","session_id":"demo-10"}
+{"text":"멀티 테넌트 SaaS에서 테넌트별 DB 분리 vs 공유 스키마 trade-off 설계 관점에서 비교해줘","asked_at":"2026-09-20T10:00:00Z","session_id":"demo-11"}
+{"text":"pydantic v2에서 model_validate랑 parse_obj 차이","asked_at":"2026-09-22T10:00:00Z","session_id":"demo-12"}

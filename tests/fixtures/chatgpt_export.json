@@ -1,0 +1,6 @@
+[{"title":"docker","conversation_id":"g1","create_time":1756684800,"mapping":{
+ "a":{"message":{"author":{"role":"system"},"content":{"parts":[""]},"create_time":1756684800}},
+ "b":{"message":{"author":{"role":"user"},"content":{"parts":["docker compose에서 볼륨 마운트 어떻게 해?"]},"create_time":1756684900}},
+ "c":{"message":{"author":{"role":"assistant"},"content":{"parts":["..."]},"create_time":1756684950}},
+ "d":{"message":{"author":{"role":"user"},"content":{"parts":["컨테이너가 바로 죽는데 왜 그래? exit code 137"]},"create_time":1756771300}}
+}}]

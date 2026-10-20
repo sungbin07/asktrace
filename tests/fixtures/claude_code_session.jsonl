@@ -1,0 +1,8 @@
+{"type":"user","userType":"external","sessionId":"s1","timestamp":"2026-09-01T09:00:00Z","message":{"role":"user","content":"prompt caching이 뭐야? 어떤 경우에 쓰는 거야"}}
+{"type":"assistant","timestamp":"2026-09-01T09:00:05Z","message":{"role":"assistant","content":[{"type":"text","text":"..."}]}}
+{"type":"user","userType":"external","sessionId":"s1","timestamp":"2026-09-01T09:05:00Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"x","content":"ok"}]}}
+{"type":"user","userType":"external","sessionId":"s1","timestamp":"2026-09-02T10:00:00Z","message":{"role":"user","content":[{"type":"text","text":"prompt caching 적용했는데 cache_read_input_tokens가 0이야 왜 안돼?"}]}}
+{"type":"user","userType":"external","sessionId":"s1","timestamp":"2026-09-02T10:01:00Z","message":{"role":"user","content":"/compact"}}
+{"type":"user","isMeta":true,"sessionId":"s1","timestamp":"2026-09-02T10:02:00Z","message":{"role":"user","content":"<system-reminder>meta</system-reminder>"}}
+{"type":"user","userType":"external","sessionId":"s1","timestamp":"2026-09-10T10:00:00Z","message":{"role":"user","content":"sqlite WAL 모드랑 journal 모드 차이가 뭐야"}}
+{"not json

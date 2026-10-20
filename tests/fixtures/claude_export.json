@@ -1,0 +1,5 @@
+[{"uuid":"c1","name":"git","created_at":"2026-08-01T00:00:00Z","chat_messages":[
+ {"uuid":"m1","sender":"human","text":"git rebase와 merge 차이가 뭐야?","created_at":"2026-08-01T00:00:00Z"},
+ {"uuid":"m2","sender":"assistant","text":"...","created_at":"2026-08-01T00:00:05Z"},
+ {"uuid":"m3","sender":"human","text":"","content":[{"type":"text","text":"interactive rebase로 커밋 합치는 방법 알려줘"}],"created_at":"2026-08-02T00:00:00Z"}
+]}]
