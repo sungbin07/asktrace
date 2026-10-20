@@ -1,14 +1,18 @@
-"""Command line entry point: ingest → tag → report."""
+"""Trace your AI questions and reflect on how your thinking develops."""
 
 from __future__ import annotations
 
 import argparse
 import json
+import os
+import sqlite3
 import sys
+import tempfile
 from datetime import date, datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
-from . import __version__, grass, metrics, report
+from . import __version__, grass, journeys, metrics, report
 from .sources import SOURCES
 from .store import DEFAULT_DB, Store
 from .tagger import get_tagger
@@ -49,12 +53,14 @@ def _parser() -> argparse.ArgumentParser:
 
     gr = sub.add_parser(
         "grass",
-        help="draw learning events per day as a contribution-graph SVG",
-        description="Write a GitHub-contribution-style SVG. A day's shade is its learning"
-        " events (concepts asked for the first time plus asks deeper than before), not its"
-        " question count. The SVG contains dates and counts only.",
+        help="draw concept exploration per day, with an optional private journey view",
+        description="A day's shade counts first-seen concepts and deeper questions."
+        " These question patterns do not confirm learning."
+        " The default SVG contains dates and counts only.",
     )
-    gr.add_argument("--out", type=Path, help="SVG file to write (default: stdout)")
+    gr.add_argument(
+        "--out", type=Path, help="output file (SVG defaults to stdout; HTML needs a file)"
+    )
     gr.add_argument("--weeks", type=_weeks, default=52, help="columns, 1-520 (default 52)")
     gr.add_argument(
         "--end",
@@ -62,6 +68,45 @@ def _parser() -> argparse.ArgumentParser:
         help="last day drawn, YYYY-MM-DD (default: today in your local time zone)",
     )
     gr.add_argument("--theme", choices=sorted(grass.THEMES), default="light")
+    gr.add_argument(
+        "--timezone", type=_timezone, help="calendar time zone, e.g. Asia/Seoul (default: local)"
+    )
+    gr.add_argument(
+        "--format",
+        choices=["svg", "html"],
+        default="svg",
+        help="SVG: dates/counts only; "
+        "HTML: private clickable questions and reflections, needs --out",
+    )
+
+    journey = sub.add_parser("journey", help="view and organise your question journeys")
+    actions = journey.add_subparsers(dest="journey_action", required=True)
+    listing = actions.add_parser("list", help="list journeys, including untagged questions")
+    listing.add_argument(
+        "--date", type=date.fromisoformat, help="show questions on this local date"
+    )
+    showing = actions.add_parser("show", help="show a whole journey in chronological order")
+    showing.add_argument("journey_id")
+    for view in (listing, showing):
+        view.add_argument("--format", choices=["md", "json"], default="md")
+        view.add_argument("--timezone", type=_timezone, help="calendar time zone (default: local)")
+    grouping = actions.add_parser("group", help="move selected questions into one journey")
+    destination = grouping.add_mutually_exclusive_group(required=True)
+    destination.add_argument("--title", help="create a new journey with this title")
+    destination.add_argument("--into", help="add questions to an existing journey ID")
+    grouping.add_argument("--questions", nargs="+", required=True, metavar="QUESTION_ID")
+    splitting = actions.add_parser("split", help="move part of a journey into a new one")
+    splitting.add_argument("journey_id")
+    splitting.add_argument("--title", required=True)
+    splitting.add_argument("--questions", nargs="+", required=True, metavar="QUESTION_ID")
+
+    review = sub.add_parser("review", help="read or save your own reflection on a journey")
+    review.add_argument("journey_id")
+    review.add_argument("--goal", help="what you initially wanted to understand")
+    review.add_argument("--learned", help="what you checked or understood, in your own words")
+    review.add_argument("--open-question", help="what remains to ask or verify")
+    review.add_argument("--format", choices=["md", "json"], default="md")
+    review.add_argument("--timezone", type=_timezone, help="display time zone (default: local)")
 
     sub.add_parser("stats", help="how many questions are stored and tagged")
 
@@ -91,7 +136,16 @@ def _weeks(value: str) -> int:
     return n
 
 
-COMMANDS = ("ingest", "tag", "report", "grass", "stats", "hook")
+def _timezone(value: str) -> ZoneInfo:
+    try:
+        return ZoneInfo(value)
+    except (ZoneInfoNotFoundError, ValueError):
+        raise argparse.ArgumentTypeError(
+            f"unknown or unavailable time zone: {value!r}; use an IANA name such as Asia/Seoul"
+        ) from None
+
+
+COMMANDS = ("ingest", "tag", "report", "grass", "journey", "review", "stats", "hook")
 
 
 def _is_hook_call(argv: list[str]) -> bool:
@@ -136,15 +190,97 @@ def _hook(db: Path, tag: str | None) -> None:
                 store.add_tags(get_tagger(tag).tag([(r["id"], r["text"]) for r in rows]))
 
 
+def _journey_command(store: Store, args: argparse.Namespace) -> None:
+    if args.cmd == "review":
+        updates = {key: getattr(args, key) for key in ("goal", "learned", "open_question")}
+        if any(value is not None for value in updates.values()):
+            group = store.save_reflection(args.journey_id, **updates)
+        else:
+            group = store.get_journey(args.journey_id)
+        groups = journeys.select([group], tz=args.timezone)
+    elif args.journey_action == "group":
+        journey_id = store.group_questions(args.questions, title=args.title, into=args.into)
+        print(f"grouped {len(set(args.questions))} questions in {journey_id}")
+        return
+    elif args.journey_action == "split":
+        journey_id = store.group_questions(
+            args.questions, title=args.title, split_from=args.journey_id
+        )
+        print(f"split {len(set(args.questions))} questions into {journey_id}")
+        return
+    elif args.journey_action == "show":
+        groups = journeys.select([store.get_journey(args.journey_id)], tz=args.timezone)
+    else:
+        groups = journeys.select(store.all_journeys(), day=args.date, tz=args.timezone)
+    print(
+        journeys.to_json(groups)
+        if args.format == "json"
+        else journeys.to_markdown(
+            groups, summary=args.cmd == "journey" and args.journey_action == "list"
+        )
+    )
+
+
+def _grass_command(store: Store, args: argparse.Namespace) -> None:
+    if args.out and args.out.resolve() == store.path.resolve():
+        raise ValueError("the output file must be different from your database")
+    days = metrics.learning_events_by_day(store.tagged_questions(), tz=args.timezone)
+    end = args.end or datetime.now().astimezone(args.timezone).date()
+    if args.format == "html":
+        html = journeys.to_html(
+            store.all_journeys(),
+            days,
+            end=end,
+            weeks=args.weeks,
+            theme=args.theme,
+            tz=args.timezone,
+            timezone_label=str(args.timezone) if args.timezone else "system local time",
+        )
+        # Unlike the public SVG, the explicit private export includes raw questions.
+        # Use owner-only permissions on platforms that support POSIX permissions.
+        temporary = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", dir=args.out.parent, prefix=".asktrace-", delete=False
+            ) as output:
+                temporary = Path(output.name)
+                output.write(html)
+            os.replace(temporary, args.out)
+        finally:
+            if temporary is not None:
+                temporary.unlink(missing_ok=True)
+        print(f"wrote private journey snapshot to {args.out}; includes questions and reflections")
+        return
+    svg = grass.render(days, end=end, weeks=args.weeks, theme=args.theme)
+    untagged = store.count_questions() - store.count_tagged()
+    if untagged:
+        print(
+            f"note: {untagged} untagged questions are not drawn; run `asktrace tag`",
+            file=sys.stderr,
+        )
+    if args.out:
+        args.out.write_text(svg, encoding="utf-8")
+        tot = grass.totals(days, *grass.window(end, args.weeks))
+        print(
+            f"wrote {args.out}: {tot['events']} learning events on"
+            f" {tot['active_days']} days in the last {grass.plural(args.weeks, 'week')}"
+        )
+    else:
+        sys.stdout.write(svg)
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else list(argv)
+    parser = _parser()
     try:
-        args = _parser().parse_args(argv)
+        args = parser.parse_args(argv)
     except SystemExit as e:
         # A mistyped hook command line must not become a failing hook.
         if e.code not in (0, None) and _is_hook_call(argv):
             return 0
         raise
+    if args.cmd == "grass" and args.format == "html" and args.out is None:
+        parser.error("private HTML includes questions and reflections; choose a file with --out")
     if args.cmd == "hook":
         try:
             _hook(args.db, args.tag)
@@ -153,7 +289,16 @@ def main(argv: list[str] | None = None) -> int:
                 print(f"asktrace hook: {e}", file=sys.stderr)
         return 0
     with Store(args.db) as store:
-        if args.cmd == "ingest":
+        if args.cmd in ("journey", "review", "grass"):
+            try:
+                if args.cmd == "grass":
+                    _grass_command(store, args)
+                else:
+                    _journey_command(store, args)
+            except (ValueError, OSError, sqlite3.Error) as e:
+                print(f"asktrace {args.cmd}: {e}", file=sys.stderr)
+                return 2
+        elif args.cmd == "ingest":
             cls = SOURCES[args.source]
             src = cls(args.path) if args.path else cls()  # type: ignore[call-arg]
             n = store.add_questions(src.questions())
@@ -182,26 +327,6 @@ def main(argv: list[str] | None = None) -> int:
             )
             summary = metrics.compute(store.tagged_questions(since=since), top_n=args.top)
             print(report.to_json(summary) if args.format == "json" else report.to_markdown(summary))
-        elif args.cmd == "grass":
-            # Days follow your local calendar, like the graph on a GitHub profile.
-            days = metrics.learning_events_by_day(store.tagged_questions(), tz=None)
-            end = args.end or datetime.now().astimezone().date()
-            svg = grass.render(days, end=end, weeks=args.weeks, theme=args.theme)
-            untagged = store.count_questions() - store.count_tagged()
-            if untagged:
-                print(
-                    f"note: {untagged} untagged questions are not drawn; run `asktrace tag`",
-                    file=sys.stderr,
-                )
-            if args.out:
-                args.out.write_text(svg, encoding="utf-8")
-                tot = grass.totals(days, *grass.window(end, args.weeks))
-                print(
-                    f"wrote {args.out}: {tot['events']} learning events on"
-                    f" {tot['active_days']} days in the last {grass.plural(args.weeks, 'week')}"
-                )
-            else:
-                sys.stdout.write(svg)
         elif args.cmd == "stats":
             nq, nt = store.count_questions(), store.count_tagged()
             print(f"questions: {nq}  tagged: {nt}  db: {store.path}")

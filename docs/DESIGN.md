@@ -2,9 +2,9 @@
 
 ## The question asktrace tries to answer
 
-"I ask an LLM dozens of questions a day. Am I actually learning, or am I asking the same
-things over and over?" The raw material is the questions themselves: what they are about,
-how deep they go, and how they repeat over time.
+"What am I exploring through AI, and how are my questions and understanding changing?"
+The raw material is the question record plus the user's own reflections. Question depth
+and repetition describe patterns, not proof of learning, mastery, or forgetting.
 
 ## Pipeline
 
@@ -17,8 +17,39 @@ export (Claude Code / Codex / claude.ai / ChatGPT / JSONL)
    → learning events per day → SVG                   metrics.py, grass.py
 ```
 
+The same questions also feed session-based journeys, manual grouping and user-authored
+reflections (`journeys.py`). A private HTML snapshot links grass dates to these records.
+
 Everything lands in one SQLite file. Ingest is idempotent (fingerprint = source + session +
 turn + text), so re-running on a fresh export only adds what is new.
+
+### Journeys and reflections
+
+The original `questions` and `tags` tables and question fingerprints are unchanged.
+Three additive tables hold journeys, one membership per question, and one editable
+reflection per journey. Old databases gain these tables through `CREATE TABLE IF NOT EXISTS`.
+Questions receive default membership lazily when a journey feature is used, so ingestion
+hooks remain focused on collection.
+
+Default journey IDs are derived from source and session ID. A question without a session
+ID gets its own default group. Group/split operations move membership atomically and never
+rewrite questions or tags. Existing moves survive re-ingestion, while new questions join
+their original session journey. User-edited group membership is marked `manual`.
+Reflections stay on the original journey when questions move, including an emptied
+journey. This preserves notes instead of choosing how to merge the user's prose.
+
+Reflections hold `goal`, `learned`, and `open_question`, plus an update timestamp. They
+are explicitly self-reported. Partial updates preserve omitted fields; an explicit empty
+string clears a field. No inference of goal, causal links, resolution or learning is
+performed. Answers and execution results are not stored by this feature.
+
+`journey list --date` and `grass --timezone` use the same calendar. Date filtering shows
+only that day's questions while indicating the whole journey's question count.
+The HTML contains every recorded question in the selected window, including untagged or
+repeated ones. Private day links are added only for dates with questions; default SVG
+exports have no question text, notes or links. HTML escapes all imported/user-authored
+text, uses no JavaScript or external assets, and is written atomically with owner-only
+permissions where supported. It is a read-only snapshot; edits happen in the CLI.
 
 ### Inside Claude Code
 
@@ -54,27 +85,28 @@ the upstream [protocol](https://github.com/openai/codex/blob/main/codex-rs/proto
 | 4     | debug  | X fails with …, why?                         |
 | 5     | design | how should I architect / trade off around X? |
 
-Depth is about the question, not the answer. Asking a depth-5 question about a concept is
-strong evidence you already hold depths 1-3 of it.
+Depth is about the question, not the answer. Asking a depth-5 question does not establish
+that the user understands the underlying concepts; they may be delegating the design.
 
 ## Signals
 
 - **Acquisition**: concepts seen for the first time, per week.
 - **Deepening**: among concepts asked more than once, the share whose max depth rose after
   the first ask.
-- **Forgetting**: re-asks of a concept, on a later day, at the same or lower depth than
+- **Re-asking**: re-asks of a concept, on a later day, at the same or lower depth than
   anything asked before. Same-day repeats are excluded: on real Claude Code transcripts an
   agent review loop produced a dozen same-day asks about one concept, which is iteration,
-  not forgetting. Three "how do I mount a docker volume" questions a month apart is the clearest
-  signal that something did not stick.
-- **Mastery per concept** (0-1): `depth/5 × (1 − 0.5^days) × recency decay`, where `days`
+  not forgetting. Later-day repeats can also reflect practice, delegation or a different
+  context; the record alone cannot distinguish those explanations.
+- **Exploration score per concept** (0-1, legacy JSON key `mastery`):
+  `depth/5 × (1 − 0.5^days) × recency decay`, where `days`
   is the number of distinct days you asked about the concept. One question, however deep,
   is only half the evidence (1 day → 0.5, 2 → 0.75, 3 → 0.875). An earlier version let a
   single depth-5 question score 1.0, so on real data the top of the table was whatever you
-  asked once today. A 90-day half-life discounts stale knowledge to a floor of 0.3 rather
-  than zero.
-- **Accumulated knowledge**: the sum of mastery over all concepts. Watch its slope, not its
-  absolute value.
+  asked once today. A 90-day half-life discounts older recorded activity with a recency
+  factor floored at 0.3 rather than zero.
+- **Total exploration score** (legacy JSON key `accumulated_knowledge`): the sum over all
+  concepts. This is a descriptive heuristic, not measured knowledge.
 
 ## Knowledge grass
 
@@ -84,12 +116,13 @@ because the graph counts commits, people keep it green with typo fixes and empty
 A graph of questions asked would fail the same way, and worse: splitting one question into
 five, or asking the same thing again, would earn a darker square.
 
-So a day's value is its **learning events**, the per-day version of acquisition and
-deepening above:
+So a day's value is its first-seen concepts and deeper asks, the per-day version of
+acquisition and deepening above. The SVG's existing “learning events” label denotes
+these question-pattern signals, not verified learning:
 
 - +1 for each concept asked about for the first time ever;
 - +1 for each concept asked about deeper than its previous maximum depth (same-day counts:
-  going from "what is X" to "why does X fail" in one session is learning);
+  going from "what is X" to "why does X fail" changes the recorded question depth);
 - 0 for asks at the same or a lower depth. Not negative: re-asking is a rational choice
   (see below), and a graph that subtracts would punish asking.
 
@@ -120,7 +153,7 @@ Choices behind the picture:
 - Not a test of what you know. It measures what you *asked*, which is a proxy. Someone who
   learned X elsewhere and never asked about it is invisible here.
 - Not a judgement about asking "shallow" questions. Re-asking a syntax detail is cheap and
-  rational; the forgetting table exists so you can decide whether to memorize it or keep
+  rational; the revisit table exists so you can decide whether to memorize it or keep
   outsourcing it.
 
 ## Taggers
@@ -139,12 +172,18 @@ Done:
 
 - [x] Run automatically inside Claude Code (`asktrace hook` for a SessionEnd hook)
 - [x] Shareable daily view: knowledge grass SVG of learning events (`asktrace grass`)
+- [x] Session-based journeys, manual group/split, and self-reported reflections
+- [x] Private HTML calendar with day links to questions and reflections
 
-Next:
+Next: validate whether people can find an earlier inquiry, write a useful reflection and
+return to an open question the following week. Improve the friction observed in that flow.
+
+Possible follow-ups, subject to that feedback:
 
 - [ ] Re-tag questions a hook tagged offline (`asktrace tag --retag heuristic`)
-- [ ] Local HTML dashboard with the weekly timeline and a concept map
 - [ ] Concept aliasing / merging (`asktrace merge "sqlite wal" "wal mode"`)
-- [ ] Spaced-repetition prompts: "you asked about X three times, want a 5-question quiz?"
 - [ ] More sources: Cursor, Gemini export, Open WebUI
 - [ ] Per-project views for Claude Code transcripts (`cwd`)
+
+Automatic coaching, quizzes and concept maps remain ideas, not part of the current MVP.
+See [the product scope](PRODUCT_DIRECTION.ko.md) for the boundary and validation questions.

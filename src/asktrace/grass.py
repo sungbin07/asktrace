@@ -80,7 +80,14 @@ def _month_labels(start: date, weeks: int) -> list[tuple[int, str]]:
     return labels
 
 
-def render(days: dict[date, DayLearning], end: date, weeks: int = 52, theme: str = "light") -> str:
+def render(
+    days: dict[date, DayLearning],
+    end: date,
+    weeks: int = 52,
+    theme: str = "light",
+    *,
+    linked_days: set[date] | None = None,
+) -> str:
     if theme not in THEMES:
         raise ValueError(f"unknown theme: {theme!r} (expected one of {sorted(THEMES)})")
     t = THEMES[theme]
@@ -103,7 +110,8 @@ def render(days: dict[date, DayLearning], end: date, weeks: int = 52, theme: str
         f"<title>asktrace knowledge grass: {summary}</title>",
         "<desc>One square per day. The shade counts learning events: concepts asked about"
         " for the first time plus questions that went deeper than before on a concept."
-        " Repeats at the same depth add nothing.</desc>",
+        " Repeats at the same depth add nothing."
+        " These counts describe question patterns, not demonstrated learning.</desc>",
         f'<rect width="{width}" height="{height}" rx="6" fill="{t["bg"]}"/>',
         f'<g font-family="{FONT}" font-size="10" fill="{t["muted"]}">',
         f'<text x="{PAD}" y="24" font-size="14" fill="{t["text"]}">'
@@ -123,12 +131,22 @@ def render(days: dict[date, DayLearning], end: date, weeks: int = 52, theme: str
             if v.events
             else "no learning events"
         )
+        linked = linked_days is not None and d in linked_days
+        if linked:
+            out.append(
+                f'<a href="#day-{d.isoformat()}" aria-label="Read questions for {d.isoformat()}">'
+            )
+            tip += "; question history available"
+        outline = ' stroke="#0969da"' if linked and not v.events else ""
         out.append(
             f'<rect x="{GRID_X + (i // 7) * PITCH}" y="{GRID_Y + (i % 7) * PITCH}"'
             f' width="{CELL}" height="{CELL}" rx="2" fill="{t["levels"][lv]}"'
-            f' data-date="{d.isoformat()}" data-level="{lv}"><title>{d.isoformat()}: {tip}</title>'
+            f' data-date="{d.isoformat()}" data-level="{lv}"{outline}>'
+            f"<title>{d.isoformat()}: {tip}</title>"
             "</rect>"
         )
+        if linked:
+            out.append("</a>")
 
     foot = grid_bottom + 20
     out.append(

@@ -44,7 +44,9 @@ def test_deepening_and_shallow_repeats():
     assert len(s.weeks) == 2
     assert s.weeks[0].new_concepts == 2 and s.weeks[1].new_concepts == 1
     md = report.to_markdown(s)
-    assert "forgetting signal" in md and "prompt caching" in md
+    assert "Revisited at the same or lower question depth" in md and "prompt caching" in md
+    assert "not demonstrated understanding" in md
+    assert "Exploration score (heuristic)" in md
     assert '"accumulated_knowledge"' in report.to_json(s)
 
 
