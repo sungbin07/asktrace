@@ -21,7 +21,7 @@ class ConceptStats:
     asks: int
     max_depth: int
     depth_trend: int  # last depth minus first depth
-    re_asks_at_or_below_depth: int  # later questions that did not go deeper: forgetting signal
+    re_asks_at_or_below_depth: int  # later-day asks that did not go deeper: forgetting signal
     distinct_days: int
     mastery: float  # 0..1 heuristic, see `mastery_score`
 
@@ -98,10 +98,14 @@ def compute(rows: list[dict], now: datetime | None = None, top_n: int = 20) -> S
         depths = [a["depth"] for a in asks]
         running_max = depths[0]
         shallow = 0
-        for d in depths[1:]:
-            if d <= running_max:
+        prev_day = asks[0]["asked_at"].date()
+        for a in asks[1:]:
+            day = a["asked_at"].date()
+            # Same-day repeats are iteration inside one working session, not forgetting.
+            if day != prev_day and a["depth"] <= running_max:
                 shallow += 1
-            running_max = max(running_max, d)
+            running_max = max(running_max, a["depth"])
+            prev_day = day
         days = {a["asked_at"].date() for a in asks}
         domain = max({a["domain"] for a in asks}, key=lambda d: sum(a["domain"] == d for a in asks))
         last = asks[-1]["asked_at"]

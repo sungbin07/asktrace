@@ -48,6 +48,14 @@ def test_deepening_and_shallow_repeats():
     assert '"accumulated_knowledge"' in report.to_json(s)
 
 
+def test_same_day_repeats_are_not_forgetting():
+    rows = [_row(3, ["plan review"], 2), _row(3, ["plan review"], 2), _row(3, ["plan review"], 1)]
+    s = metrics.compute(rows, now=NOW)
+    (c,) = s.top_concepts
+    assert c.asks == 3 and c.re_asks_at_or_below_depth == 0
+    assert s.re_ask_rate == 0.0 and s.shallow_repeats == []
+
+
 def test_mastery_decays_but_keeps_floor():
     fresh = metrics.mastery_score(5, 3, 0)
     old = metrics.mastery_score(5, 3, 365)

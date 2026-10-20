@@ -37,8 +37,10 @@ strong evidence you already hold depths 1-3 of it.
 - **Acquisition**: concepts seen for the first time, per week.
 - **Deepening**: among concepts asked more than once, the share whose max depth rose after
   the first ask.
-- **Forgetting**: re-asks of a concept at the same or lower depth than anything asked
-  before. Three "how do I mount a docker volume" questions a month apart is the clearest
+- **Forgetting**: re-asks of a concept, on a later day, at the same or lower depth than
+  anything asked before. Same-day repeats are excluded: on real Claude Code transcripts an
+  agent review loop produced a dozen same-day asks about one concept, which is iteration,
+  not forgetting. Three "how do I mount a docker volume" questions a month apart is the clearest
   signal that something did not stick.
 - **Mastery per concept** (0-1): `depth/5 × spacing bonus × recency decay`. Revisiting on
   separate days (spaced repetition) earns up to +50%; a 90-day half-life discounts stale
@@ -58,6 +60,8 @@ strong evidence you already hold depths 1-3 of it.
 
 - `heuristic`: regex depth rules + keyword domains + token concepts. Deterministic, offline,
   used in tests. Concepts are noisy (surface tokens, not canonical names).
+- `claude-code`: same prompt and schema, sent through `claude -p --json-schema`, so it runs
+  on a Claude Pro/Max subscription with no API key. One CLI call per 25 questions.
 - `claude`: one structured-output call per 25 questions, with a system prompt cached across
   batches. Produces canonical concept names, so revisits across phrasing and language
   ("git rebase" asked in Korean and English) collapse into one concept.
