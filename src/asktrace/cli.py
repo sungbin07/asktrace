@@ -76,7 +76,7 @@ def _parser() -> argparse.ArgumentParser:
         choices=["svg", "html"],
         default="svg",
         help="SVG: dates/counts only; "
-        "HTML: private clickable questions and reflections, needs --out",
+        "HTML: private clickable questions and reflections, needs --out FILE.html",
     )
 
     journey = sub.add_parser("journey", help="view and organise your question journeys")
@@ -279,8 +279,17 @@ def main(argv: list[str] | None = None) -> int:
         if e.code not in (0, None) and _is_hook_call(argv):
             return 0
         raise
-    if args.cmd == "grass" and args.format == "html" and args.out is None:
-        parser.error("private HTML includes questions and reflections; choose a file with --out")
+    if args.cmd == "grass" and args.format == "html":
+        if args.out is None:
+            parser.error(
+                "private HTML includes questions and reflections; choose a file with --out"
+            )
+        # A private snapshot under a .svg name could be committed where the public SVG goes.
+        if args.out.suffix.lower() not in (".html", ".htm"):
+            parser.error(
+                "private HTML includes questions and reflections; "
+                f"--out must end in .html or .htm, not {args.out.name!r}"
+            )
     if args.cmd == "hook":
         try:
             _hook(args.db, args.tag)

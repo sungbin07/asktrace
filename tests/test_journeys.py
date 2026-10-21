@@ -428,7 +428,10 @@ def test_cli_errors_do_not_succeed_or_modify_data(tmp_path, capsys, questions):
     assert "unknown journey" in capsys.readouterr().err
     assert main([*prefix, "journey", "group", "--title", "Bad", "--questions", "missing"]) == 2
     assert "unknown question" in capsys.readouterr().err
-    assert main([*prefix, "grass", "--format", "html", "--out", str(db)]) == 2
+    assert main([*prefix, "grass", "--out", str(db)]) == 2
+    assert "different from your database" in capsys.readouterr().err
+    html_db = tmp_path / "private.html"
+    assert main(["--db", str(html_db), "grass", "--format", "html", "--out", str(html_db)]) == 2
     assert "different from your database" in capsys.readouterr().err
     for argv in [
         ["grass", "--format", "html"],
@@ -452,6 +455,30 @@ def test_cli_empty_journeys_and_private_export(tmp_path, capsys):
     output = tmp_path / "empty.html"
     assert main([*prefix, "grass", "--format", "html", "--out", str(output)]) == 0
     assert "No questions in this window" in output.read_text()
+
+
+@pytest.mark.parametrize("name", ["grass.svg", "grass", "grass.html.svg", "grass.png"])
+def test_private_export_refuses_a_non_html_file_name(tmp_path, capsys, questions, name):
+    # The profile flow commits SVGs to a public repo; private text must not land there.
+    db = tmp_path / "a.db"
+    with Store(db) as store:
+        store.add_questions(questions)
+    output = tmp_path / name
+    with pytest.raises(SystemExit) as error:
+        main(["--db", str(db), "grass", "--format", "html", "--out", str(output)])
+    assert error.value.code == 2
+    assert "--out must end in .html or .htm" in capsys.readouterr().err
+    assert not output.exists()
+
+
+@pytest.mark.parametrize("name", ["journeys.html", "journeys.htm", "JOURNEYS.HTML"])
+def test_private_export_accepts_html_file_names(tmp_path, name):
+    output = tmp_path / name
+    assert (
+        main(["--db", str(tmp_path / "a.db"), "grass", "--format", "html", "--out", str(output)])
+        == 0
+    )
+    assert output.read_text(encoding="utf-8").lstrip().lower().startswith("<!doctype html")
 
 
 def test_private_export_failure_preserves_previous_file(tmp_path, monkeypatch, capsys):
