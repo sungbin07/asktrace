@@ -259,6 +259,15 @@ def test_missing_session_path_is_an_error(tmp_path):
         list(CodexSource(tmp_path / "missing").questions())
 
 
+def test_cli_without_codex_sessions_prints_one_line(tmp_path, monkeypatch, capsys):
+    monkeypatch.setenv("CODEX_HOME", str(tmp_path / "no-codex"))
+    assert main(["--db", str(tmp_path / "codex.db"), "ingest", "codex"]) == 2
+    out = capsys.readouterr()
+    assert out.out == ""
+    assert out.err.startswith("asktrace ingest: Codex sessions not found")
+    assert out.err.count("\n") == 1 and "Traceback" not in out.err
+
+
 def test_codex_cli_ingest_tag_report(tmp_path, capsys):
     db_args = ["--db", str(tmp_path / "codex.db")]
     assert main([*db_args, "ingest", "codex", str(FIXTURE)]) == 0

@@ -310,7 +310,11 @@ def main(argv: list[str] | None = None) -> int:
         elif args.cmd == "ingest":
             cls = SOURCES[args.source]
             src = cls(args.path) if args.path else cls()  # type: ignore[call-arg]
-            n = store.add_questions(src.questions())
+            try:
+                n = store.add_questions(src.questions())
+            except FileNotFoundError as e:
+                print(f"asktrace ingest: {e}", file=sys.stderr)
+                return 2
             print(f"ingested {n} new questions ({store.count_questions()} total)")
         elif args.cmd == "tag":
             rows = store.untagged(limit=args.limit)
