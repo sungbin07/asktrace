@@ -62,12 +62,13 @@ class CodexSource(Source):
     def _read_file(self, file: Path) -> Iterator[Question]:
         session_id = file.stem
         turn = 0
-        with file.open(encoding="utf-8") as fh:
+        # A running session may end in a partially written record, possibly cut inside a
+        # multi-byte character. Skip bad lines instead of losing the whole directory.
+        with file.open(encoding="utf-8", errors="replace") as fh:
             for line in fh:
                 try:
                     rec = json.loads(line)
                 except json.JSONDecodeError:
-                    # A running session may end in a partially written record.
                     continue
                 if not isinstance(rec, dict):
                     continue
