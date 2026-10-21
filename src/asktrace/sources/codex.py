@@ -44,7 +44,7 @@ _CONTEXT_PREFIXES = (
     "# Files pasted by the user:",
     "<in-app-browser-context",
 )
-_REQUEST_HEADING_RE = re.compile(r"^## My request(?: for Codex)?:[ \t]*$", re.MULTILINE)
+_REQUEST_HEADING_RE = re.compile(r"^## My request(?: for Codex)?:[ \t]*\r?$", re.MULTILINE)
 _BROWSER_CONTEXT_END = "</in-app-browser-context>"
 # The desktop app sends answers to a question Codex asked in this envelope. Its question text
 # was written by the model, so the reply is not a question the user asked.
