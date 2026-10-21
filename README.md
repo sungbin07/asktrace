@@ -121,7 +121,8 @@ colour; an outlined square indicates a recorded day with no scored activity.
 
 **This HTML is a private snapshot containing question text and reflections.** It has no
 server, scripts or external assets. Save changes through the CLI and regenerate the file.
-The default SVG remains the sharing format with dates and counts only. `--timezone`
+`--out` must end in `.html` or `.htm`, so the snapshot cannot be written under the `.svg`
+name you commit to a public profile. The default SVG remains the sharing format with dates and counts only. `--timezone`
 uses the same calendar in `journey list --date` and `grass`; omitting it uses system local
 time. `--end` and `--weeks` set the exported window.
 The window filters question dates; each included journey shows its full current reflection,
