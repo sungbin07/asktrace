@@ -238,10 +238,11 @@ Codex's MCP/app server, and subagent/internal threads, are skipped, because a sc
 model wrote those prompts, not you.
 
 The IDE extension and the desktop app put context in front of what you typed (open tabs,
-mentioned or pasted files, the page in the in-app browser) and mark your part with a
-`## My request…` heading. Only your request is stored, so the question text, journey titles
+mentioned or pasted files, a referenced ChatGPT conversation, the page in the in-app browser)
+and mark your part with a `## My request…` heading. Only your request is stored, so the question text, journey titles
 and tagger input start with your words. A message that holds only pasted files and no typed
-request is not counted, and neither are your answers to a question Codex asked you.
+request is not counted, and neither are your answers to a question Codex asked you or the
+prompts a Codex automation sends on a schedule.
 
 Re-importing the same session does not duplicate questions. Malformed records, including an incomplete final line,
 are skipped. A database filled by an earlier development build of the Codex reader (which

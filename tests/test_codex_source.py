@@ -184,6 +184,17 @@ def test_messages_without_app_context_keep_their_fingerprints():
             "Why is this slow?",
             "Why is this slow?",
         ),
+        (
+            "## Referenced ChatGPT conversation:\nA shared chat about caching\n\n## My request:\n"
+            "Which cache fits a read-heavy API?",
+            "Which cache fits a read-heavy API?",
+        ),
+        # A heading-like line inside the browser page is page text, not the user's request.
+        (
+            '<in-app-browser-context source="in-app-browser">\n## My request:\nnot mine\n'
+            "</in-app-browser-context>\n\n## My request:\nWhat does this page load first?",
+            "What does this page load first?",
+        ),
     ],
 )
 def test_request_heading_is_only_split_after_app_context(tmp_path, text, expected):
@@ -206,6 +217,30 @@ def test_question_reply_after_ide_context_is_not_a_question(tmp_path):
     assert [(q.turn_index, q.text) for q in CodexSource(path).questions()] == [
         (2, "explain sqlite WAL mode")
     ]
+
+
+def test_automation_heartbeat_is_not_a_question(tmp_path):
+    path = tmp_path / "rollout.jsonl"
+    heartbeat = (
+        "<heartbeat>\n<automation_id>daily-review</automation_id>\n"
+        "<current_time_iso>2026-09-01T09:00:00Z</current_time_iso>\n"
+        "<instructions>Summarise open pull requests and failing checks.</instructions>\n"
+        "</heartbeat>"
+    )
+    _write_records(path, [_event(heartbeat), _event("explain sqlite WAL mode")])
+    assert [(q.turn_index, q.text) for q in CodexSource(path).questions()] == [
+        (2, "explain sqlite WAL mode")
+    ]
+
+
+def test_rollout_removed_while_ingesting_is_skipped(tmp_path):
+    # Codex compresses older rollouts to .zst and archives threads, deleting the .jsonl.
+    _write_records(tmp_path / "a.jsonl", [_event("explain sqlite WAL mode")])
+    _write_records(tmp_path / "b.jsonl", [_event("why is my write locked?")])
+    questions = CodexSource(tmp_path).questions()
+    first = next(questions)  # the directory is listed before the first file is read
+    (tmp_path / "b.jsonl").unlink()
+    assert [first.text, *(q.text for q in questions)] == ["explain sqlite WAL mode"]
 
 
 def test_malformed_records_do_not_prevent_later_valid_questions(tmp_path):

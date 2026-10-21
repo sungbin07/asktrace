@@ -40,28 +40,39 @@ def _user_text(payload: dict) -> str | None:
 _CONTEXT_PREFIXES = (
     "# Context from my IDE setup:",
     "## Referenced chats with Codex:",
+    "## Referenced ChatGPT conversation:",
     "# Files mentioned by the user:",
     "# Files pasted by the user:",
     "<in-app-browser-context",
 )
 _REQUEST_HEADING_RE = re.compile(r"^## My request(?: for Codex)?:[ \t]*\r?$", re.MULTILINE)
 _BROWSER_CONTEXT_END = "</in-app-browser-context>"
-# The desktop app sends answers to a question Codex asked in this envelope. Its question text
-# was written by the model, so the reply is not a question the user asked.
-_QUESTION_REPLY = ("<send_user_message_question_reply>", "</send_user_message_question_reply>")
+# Envelopes whose content the user did not write as a question: answers to a question Codex
+# asked (the question text came from the model), and the prompts Codex Desktop automations
+# send on a schedule.
+_NOT_QUESTIONS = (
+    ("<send_user_message_question_reply>", "</send_user_message_question_reply>"),
+    ("<heartbeat>", "</heartbeat>"),
+)
 
 
 def _request_text(text: str) -> str:
     """The user's own words in a Codex message, without the context the client added."""
     text = text.strip()
     if text.startswith(_CONTEXT_PREFIXES):
-        heading = _REQUEST_HEADING_RE.search(text)
+        # A browser page can contain anything, including a line that looks like the request
+        # heading, so look for the heading only after the page.
+        start = 0
+        if text.startswith("<in-app-browser-context"):
+            end = text.find(_BROWSER_CONTEXT_END)
+            start = end + len(_BROWSER_CONTEXT_END) if end != -1 else 0
+        heading = _REQUEST_HEADING_RE.search(text, start)
         if heading:
             # The first heading: anything after it, even the same heading again, is the user's.
             text = text[heading.end() :].strip()
-        elif text.startswith("<in-app-browser-context") and _BROWSER_CONTEXT_END in text:
-            text = text.split(_BROWSER_CONTEXT_END, 1)[1].strip()
-    if text.startswith(_QUESTION_REPLY[0]) and text.endswith(_QUESTION_REPLY[1]):
+        elif start:
+            text = text[start:].strip()
+    if any(text.startswith(open_) and text.endswith(close) for open_, close in _NOT_QUESTIONS):
         return ""
     return text
 
@@ -99,9 +110,15 @@ class CodexSource(Source):
     def _read_file(self, file: Path) -> Iterator[Question]:
         session_id = file.stem
         turn = 0
-        # A running session may end in a partially written record, possibly cut inside a
-        # multi-byte character. Skip bad lines instead of losing the whole directory.
-        with file.open(encoding="utf-8", errors="replace") as fh:
+        try:
+            # A running session may end in a partially written record, possibly cut inside a
+            # multi-byte character. Skip bad lines instead of losing the whole directory.
+            fh = file.open(encoding="utf-8", errors="replace")
+        except FileNotFoundError:
+            # Codex compresses older rollouts to .zst and archives threads, so a file listed a
+            # moment ago can be gone; skip it rather than abort the whole ingest.
+            return
+        with fh:
             for line in fh:
                 try:
                     rec = json.loads(line)
