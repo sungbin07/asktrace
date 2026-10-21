@@ -104,9 +104,10 @@ the `zstandard` package from the `codex` extra, reading across frames. There is 
 fallback: it would start a process per file and is not installed everywhere. Without a
 decoder, compressed files are counted and skipped with one stderr line, which keeps zero
 required dependencies. Decoding a damaged file stops at the damage and keeps the questions
-before it; one stderr line counts files that are not zstd or, with `compression.zstd`, end
-inside a frame (`zstandard` ends such a stream quietly). Codex verifies the `.zst` in a
-temporary file before renaming it, so neither is expected in practice.
+before it; one stderr line counts the files the decoder rejected: data that is not zstd or is
+corrupt, and with `compression.zstd` also a file that ends inside a frame (`zstandard` ends
+such a stream quietly). Codex verifies the `.zst` in a temporary file before renaming it, so
+none of this is expected in practice.
 
 ## Depth scale
 

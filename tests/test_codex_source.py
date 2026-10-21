@@ -383,7 +383,7 @@ _HEARTBEAT = "<heartbeat>\n<instructions>Summarise open pull requests.</instruct
         ),
     ],
 )
-def test_compressed_rollout_gives_the_same_questions_as_plain(tmp_path, content):
+def test_compressed_rollout_gives_the_same_questions_as_plain(tmp_path, capsys, content):
     plain = tmp_path / "2026" / "09" / "01" / "rollout-2026-09-01T09-00-00-demo.jsonl"
     plain.parent.mkdir(parents=True)
     plain.write_bytes(content)
@@ -391,6 +391,8 @@ def test_compressed_rollout_gives_the_same_questions_as_plain(tmp_path, content)
     compressed = _compress(plain)
     assert _seen(CodexSource(tmp_path).questions()) == expected
     assert _seen(CodexSource(compressed).questions()) == expected
+    # Decoded and not skipped or cut short, also where no question is expected.
+    assert capsys.readouterr().err == ""
 
 
 def test_session_compressed_after_ingest_is_not_ingested_again(tmp_path, capsys):
@@ -453,15 +455,31 @@ def test_without_a_decoder_compressed_rollouts_are_skipped_with_one_note(
     assert "asktrace[codex]" in out.err and out.err.count("\n") == 1
 
 
-def test_damaged_compressed_rollout_keeps_earlier_questions(tmp_path, capsys):
+def test_compressed_rollout_that_is_not_zstd_is_reported(tmp_path, capsys):
+    _zstd(b"")  # skips without a decoder
     _write_records(tmp_path / "rollout-a.jsonl", [_event("explain sqlite WAL mode")])
     (tmp_path / "rollout-b.jsonl.zst").write_bytes(b"not zstd")
-    # A complete frame followed by a frame cut short.
+    assert [q.text for q in CodexSource(tmp_path).questions()] == ["explain sqlite WAL mode"]
+    err = capsys.readouterr().err
+    assert err == (
+        "asktrace: 1 compressed Codex rollouts could not be fully decompressed; "
+        "questions read before the damage were kept\n"
+    )
+
+
+def test_compressed_rollout_cut_short_keeps_earlier_questions(tmp_path, capsys):
+    # A complete frame followed by a frame cut short. compression.zstd reports the cut;
+    # zstandard ends the stream there quietly.
     first = _records_bytes([_event("why is my write locked?")])
     rest = _zstd(_records_bytes([_event("and checkpoints?")] * 50))
     (tmp_path / "rollout-c.jsonl.zst").write_bytes(_zstd(first) + rest[: len(rest) // 2])
-    texts = [q.text for q in CodexSource(tmp_path).questions()]
-    assert texts == ["explain sqlite WAL mode", "why is my write locked?"]
-    err = capsys.readouterr().err
-    assert err.startswith("asktrace: ") and "could not be fully decompressed" in err
-    assert err.count("\n") == 1
+    assert [q.text for q in CodexSource(tmp_path).questions()] == ["why is my write locked?"]
+    assert capsys.readouterr().err.count("\n") <= 1
+
+
+def test_directory_named_like_a_rollout_falls_back_to_the_zst(tmp_path):
+    (tmp_path / "rollout-a.jsonl").mkdir()
+    (tmp_path / "rollout-a.jsonl.zst").write_bytes(
+        _zstd(_records_bytes([_event("explain sqlite WAL mode")]))
+    )
+    assert [q.text for q in CodexSource(tmp_path).questions()] == ["explain sqlite WAL mode"]

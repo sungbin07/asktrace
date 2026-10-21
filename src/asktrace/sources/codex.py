@@ -128,11 +128,14 @@ def _zstd_decoder() -> tuple[Callable[[Path], TextIO], tuple[type[Exception], ..
         return None
 
     def open_zstandard(path: Path) -> TextIO:
-        # Codex writes one frame; read on across frames like `zstd -d` in case of more.
-        reader = zstandard.ZstdDecompressor().stream_reader(
-            path.open("rb"), read_across_frames=True
-        )
-        return io.TextIOWrapper(reader, encoding="utf-8", errors="replace")
+        raw = path.open("rb")
+        try:
+            # Codex writes one frame; read on across frames like `zstd -d` in case of more.
+            reader = zstandard.ZstdDecompressor().stream_reader(raw, read_across_frames=True)
+            return io.TextIOWrapper(reader, encoding="utf-8", errors="replace")
+        except BaseException:
+            raw.close()
+            raise
 
     return open_zstandard, (zstandard.ZstdError,)
 
@@ -165,7 +168,7 @@ class CodexSource(Source):
             try:
                 fh: TextIO = rollout.open(encoding="utf-8", errors="replace")
                 errors: tuple[type[Exception], ...] = ()
-            except FileNotFoundError:
+            except (FileNotFoundError, IsADirectoryError):
                 if decoder is None:
                     undecoded += compressed.exists()
                     continue
