@@ -8,6 +8,8 @@ from asktrace.sources import CodexSource
 from asktrace.store import Store
 
 FIXTURE = Path(__file__).parent / "fixtures" / "codex_session.jsonl"
+# Synthetic text in the record layout of a Codex desktop-app (paginated) rollout.
+DESKTOP_FIXTURE = Path(__file__).parent / "fixtures" / "codex_desktop_context.jsonl"
 
 
 def _write_records(path, records):
@@ -129,6 +131,76 @@ def test_interactive_threads_count_as_human_questions(tmp_path, meta):
         [{"type": "session_meta", "payload": {"id": "s", **meta}}, _event("review this code")],
     )
     assert [q.text for q in CodexSource(path).questions()] == ["review this code"]
+
+
+def test_app_context_is_dropped_and_only_the_request_is_kept():
+    questions = list(CodexSource(DESKTOP_FIXTURE).questions())
+    assert [(q.turn_index, q.text) for q in questions] == [
+        (1, "Why does this schema need a covering index?"),
+        (2, "Is this pricing table accessible to screen readers?"),
+        # 3: pasted files with an empty request; 4: answers to a question Codex asked.
+        (5, "explain sqlite WAL checkpoints"),
+        (6, "How do I retry a locked SQLite write?"),
+    ]
+    assert all(q.session_id == "desktop-demo" for q in questions)
+
+
+def test_messages_without_app_context_keep_their_fingerprints():
+    # Fingerprints from before app context was stripped: re-importing an unwrapped
+    # message must not add a second copy of it.
+    assert [q.fingerprint for q in CodexSource(FIXTURE).questions()] == [
+        "6ca95fd2ce014df1135c62bf",
+        "e4037899ed3f651f96396926",
+    ]
+
+
+@pytest.mark.parametrize(
+    "text, expected",
+    [
+        # Without app context in front, a request heading is the user's own text.
+        ("## My request:\nexplain sqlite WAL mode", "## My request:\nexplain sqlite WAL mode"),
+        (
+            "# Notes\nkeep this\n## My request:\nexplain WAL",
+            "# Notes\nkeep this\n## My request:\nexplain WAL",
+        ),
+        # After the first heading, everything is the user's, even the same heading.
+        (
+            "# Files mentioned by the user:\n\n## a.md: /x/a.md\n\n## My request:\n"
+            "Rewrite this prompt:\n## My request:\nkeep both",
+            "Rewrite this prompt:\n## My request:\nkeep both",
+        ),
+        (
+            "## Referenced chats with Codex:\nThese are live references to Codex tasks.\n"
+            '[{"threadId":"t-1"}]\n## My request for Codex:\nContinue the migration plan',
+            "Continue the migration plan",
+        ),
+        (
+            '<in-app-browser-context source="in-app-browser">\nA page\n</in-app-browser-context>\n'
+            "What does this page load first?",
+            "What does this page load first?",
+        ),
+    ],
+)
+def test_request_heading_is_only_split_after_app_context(tmp_path, text, expected):
+    path = tmp_path / "rollout.jsonl"
+    _write_records(path, [_event(text)])
+    assert [q.text for q in CodexSource(path).questions()] == [expected]
+
+
+def test_question_reply_after_ide_context_is_not_a_question(tmp_path):
+    path = tmp_path / "rollout.jsonl"
+    reply = (
+        "<send_user_message_question_reply>\n"
+        '[{"questionItemId":"[\\"q\\",0]","question":"Which database?","answer":"SQLite"}]\n'
+        "</send_user_message_question_reply>"
+    )
+    ide = (
+        "# Context from my IDE setup:\n\n## Open tabs:\n- a.py: a.py\n\n## My request for Codex:\n"
+    )
+    _write_records(path, [_event(ide + reply), _event("explain sqlite WAL mode")])
+    assert [(q.turn_index, q.text) for q in CodexSource(path).questions()] == [
+        (2, "explain sqlite WAL mode")
+    ]
 
 
 def test_malformed_records_do_not_prevent_later_valid_questions(tmp_path):
