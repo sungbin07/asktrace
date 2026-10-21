@@ -22,7 +22,9 @@ dependencies = []
 
 [project.optional-dependencies]
 claude = ["anthropic>=1.0", "pydantic>=2"]
-dev = ["pytest>=8", "ruff>=0.6", "anthropic>=1.0", "pydantic>=2"]
+# Reads compressed Codex rollouts on Pythons without compression.zstd (3.13 and older).
+codex = ["zstandard>=0.23"]
+dev = ["pytest>=8", "ruff>=0.6", "anthropic>=1.0", "pydantic>=2", "zstandard>=0.23"]
 
 [project.scripts]
 asktrace = "asktrace.cli:main"

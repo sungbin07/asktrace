@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import io
 import json
 import os
 import re
-from collections.abc import Iterator
+import sys
+from collections.abc import Callable, Iterator
 from datetime import datetime
 from pathlib import Path
+from typing import TextIO
 
 from ..models import Question
 from .base import Source, looks_like_question
@@ -90,6 +93,50 @@ def _interactive_session(meta: dict) -> bool:
     return meta.get("thread_source") in (None, "user")
 
 
+# Codex compresses rollouts untouched for a week to `<name>.jsonl.zst` and deletes the
+# `.jsonl` (rollout/src/compression.rs); resuming such a session restores the `.jsonl`.
+_COMPRESSED_SUFFIX = ".zst"
+
+
+def _plain_path(path: Path) -> Path:
+    """The `.jsonl` name of a rollout, whichever form it is stored in."""
+    if path.name.endswith(_COMPRESSED_SUFFIX):
+        return path.with_name(path.name[: -len(_COMPRESSED_SUFFIX)])
+    return path
+
+
+def _zstd_decoder() -> tuple[Callable[[Path], TextIO], tuple[type[Exception], ...]] | None:
+    """Opener for `.zst` files as UTF-8 text and the errors a damaged file raises.
+
+    Python 3.14+ usually ships `compression.zstd`; otherwise the optional `zstandard`
+    package (`asktrace[codex]`) is used. None when neither is installed.
+    """
+    try:
+        from compression import zstd
+    except ImportError:
+        pass
+    else:
+
+        def open_stdlib(path: Path) -> TextIO:
+            return zstd.open(path, "rt", encoding="utf-8", errors="replace")
+
+        # A file cut inside a frame raises EOFError instead of ZstdError.
+        return open_stdlib, (zstd.ZstdError, EOFError)
+    try:
+        import zstandard
+    except ImportError:
+        return None
+
+    def open_zstandard(path: Path) -> TextIO:
+        # Codex writes one frame; read on across frames like `zstd -d` in case of more.
+        reader = zstandard.ZstdDecompressor().stream_reader(
+            path.open("rb"), read_across_frames=True
+        )
+        return io.TextIOWrapper(reader, encoding="utf-8", errors="replace")
+
+    return open_zstandard, (zstandard.ZstdError,)
+
+
 class CodexSource(Source):
     name = "codex"
 
@@ -103,62 +150,99 @@ class CodexSource(Source):
                 f"Codex sessions not found: {self.path}. "
                 "Pass a local rollout JSONL file or sessions directory."
             )
-        files = [self.path] if self.path.is_file() else sorted(self.path.rglob("*.jsonl"))
-        for file in files:
-            yield from self._read_file(file)
+        if self.path.is_file():
+            rollouts = [_plain_path(self.path)]
+        else:
+            found = [*self.path.rglob("*.jsonl"), *self.path.rglob("*.jsonl.zst")]
+            # One entry per session, even while both forms are on disk.
+            rollouts = sorted({_plain_path(file) for file in found})
+        decoder = _zstd_decoder()
+        undecoded = damaged = 0
+        for rollout in rollouts:
+            compressed = rollout.with_name(rollout.name + _COMPRESSED_SUFFIX)
+            # Like Codex, prefer the `.jsonl`: it is the same session, or a newer copy of it
+            # when a compressed session was resumed. Either form can vanish after listing.
+            try:
+                fh: TextIO = rollout.open(encoding="utf-8", errors="replace")
+                errors: tuple[type[Exception], ...] = ()
+            except FileNotFoundError:
+                if decoder is None:
+                    undecoded += compressed.exists()
+                    continue
+                open_compressed, errors = decoder
+                try:
+                    fh = open_compressed(compressed)
+                except FileNotFoundError:
+                    continue
+                except errors:
+                    damaged += 1
+                    continue
+            with fh:
+                try:
+                    # The session id fallback is the `.jsonl` stem for both forms, so the
+                    # fingerprints of a session do not change when Codex compresses it.
+                    yield from self._read_lines(fh, rollout.stem)
+                except errors:
+                    # Questions before the damaged part were already yielded and are kept.
+                    damaged += 1
+        if undecoded:
+            print(
+                f"asktrace: skipped {undecoded} compressed Codex rollouts (.jsonl.zst); "
+                "install asktrace[codex] or use Python 3.14+ to read them",
+                file=sys.stderr,
+            )
+        if damaged:
+            print(
+                f"asktrace: {damaged} compressed Codex rollouts could not be fully "
+                "decompressed; questions read before the damage were kept",
+                file=sys.stderr,
+            )
 
-    def _read_file(self, file: Path) -> Iterator[Question]:
-        session_id = file.stem
+    def _read_lines(self, fh: TextIO, session_id: str) -> Iterator[Question]:
         turn = 0
-        try:
-            # A running session may end in a partially written record, possibly cut inside a
-            # multi-byte character. Skip bad lines instead of losing the whole directory.
-            fh = file.open(encoding="utf-8", errors="replace")
-        except FileNotFoundError:
-            # Codex compresses older rollouts to .zst and archives threads, so a file listed a
-            # moment ago can be gone; skip it rather than abort the whole ingest.
-            return
-        with fh:
-            for line in fh:
-                try:
-                    rec = json.loads(line)
-                except json.JSONDecodeError:
-                    continue
-                if not isinstance(rec, dict):
-                    continue
-                payload = rec.get("payload")
-                if not isinstance(payload, dict):
-                    continue
-                if rec.get("type") == "session_meta":
-                    if not _interactive_session(payload):
-                        return
-                    if isinstance(payload.get("id"), str) and payload["id"]:
-                        session_id = payload["id"]
-                    continue
-                # response_item can duplicate user input and contain injected
-                # instructions. Only persisted user-facing events are evidence.
-                if rec.get("type") != "event_msg":
-                    continue
-                text = _user_text(payload)
-                if text is None:
-                    continue
-                # Count the turn before unwrapping so the turn indices, and with them the
-                # fingerprints, of the other messages do not depend on this rule.
-                turn += 1
-                text = _request_text(text)
-                if not looks_like_question(text):
-                    continue
-                ts = rec.get("timestamp")
-                if not isinstance(ts, str):
-                    continue
-                try:
-                    asked_at = datetime.fromisoformat(ts.replace("Z", "+00:00"))
-                except ValueError:
-                    continue
-                yield Question(
-                    text=text,
-                    asked_at=asked_at,
-                    source=self.name,
-                    session_id=session_id,
-                    turn_index=turn,
-                )
+        # A running session may end in a partially written record, possibly cut inside a
+        # multi-byte character (decoded with errors="replace"). Skip bad lines instead of
+        # losing the whole directory.
+        for line in fh:
+            try:
+                rec = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(rec, dict):
+                continue
+            payload = rec.get("payload")
+            if not isinstance(payload, dict):
+                continue
+            if rec.get("type") == "session_meta":
+                if not _interactive_session(payload):
+                    return
+                if isinstance(payload.get("id"), str) and payload["id"]:
+                    session_id = payload["id"]
+                continue
+            # response_item can duplicate user input and contain injected
+            # instructions. Only persisted user-facing events are evidence.
+            if rec.get("type") != "event_msg":
+                continue
+            text = _user_text(payload)
+            if text is None:
+                continue
+            # Count the turn before unwrapping so the turn indices, and with them the
+            # fingerprints, of the other messages do not depend on this rule.
+            turn += 1
+            text = _request_text(text)
+            if not looks_like_question(text):
+                continue
+            ts = rec.get("timestamp")
+            if not isinstance(ts, str):
+                continue
+            try:
+                asked_at = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+            except ValueError:
+                continue
+            yield Question(
+                text=text,
+                asked_at=asked_at,
+                source=self.name,
+                session_id=session_id,
+                turn_index=turn,
+            )
