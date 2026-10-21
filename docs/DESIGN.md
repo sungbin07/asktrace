@@ -90,6 +90,24 @@ the upstream [protocol](https://github.com/openai/codex/blob/rust-v0.147.0/codex
 [turn items](https://github.com/openai/codex/blob/rust-v0.147.0/codex-rs/protocol/src/items.rs), and
 [persistence policy](https://github.com/openai/codex/blob/rust-v0.147.0/codex-rs/rollout/src/policy.rs).
 
+Codex compresses rollouts that have not changed for seven days into a single zstd frame named
+`<rollout>.jsonl.zst` and deletes the `.jsonl`; resuming such a session writes the `.jsonl`
+back ([compression](https://github.com/openai/codex/blob/rust-v0.147.0/codex-rs/rollout/src/compression.rs)).
+The reader lists both forms as one entry per `.jsonl` name and, like Codex's
+`existing_rollout_path`, opens the `.jsonl` first and the `.jsonl.zst` only when the plain file
+is missing, also when it vanished after listing. Decompressed lines go through exactly the
+same record rules as a plain file, and the session-id fallback is the `.jsonl` stem for both
+forms, so a session's fingerprints do not change when it is compressed.
+
+Decoding uses `compression.zstd` (Python 3.14+, an optional module in CPython builds) or else
+the `zstandard` package from the `codex` extra, reading across frames. There is no `zstd` CLI
+fallback: it would start a process per file and is not installed everywhere. Without a
+decoder, compressed files are counted and skipped with one stderr line, which keeps zero
+required dependencies. Decoding a damaged file stops at the damage and keeps the questions
+before it; one stderr line counts files that are not zstd or, with `compression.zstd`, end
+inside a frame (`zstandard` ends such a stream quietly). Codex verifies the `.zst` in a
+temporary file before renaming it, so neither is expected in practice.
+
 ## Depth scale
 
 | depth | label  | typical question                             |

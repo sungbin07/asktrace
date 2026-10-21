@@ -30,6 +30,7 @@ the API with a key.
 ```bash
 pip install asktrace            # offline heuristic tagger
 pip install 'asktrace[claude]'  # + Claude tagger
+pip install 'asktrace[codex]'   # + compressed Codex history on Python 3.13 and older
 ```
 
 Or from source: `uv sync --extra dev`.
@@ -220,8 +221,8 @@ nothing reads your database except asktrace on your own machine.
 
 ## Codex local sessions
 
-`asktrace ingest codex` reads local, uncompressed rollout JSONL files recursively.
-You can also select a sessions directory or one rollout file:
+`asktrace ingest codex` reads local rollout JSONL files recursively, plain (`.jsonl`) and
+compressed (`.jsonl.zst`). You can also select a sessions directory or one rollout file:
 
 ```bash
 asktrace ingest codex /path/to/sessions
@@ -229,6 +230,14 @@ asktrace ingest codex /path/to/rollout.jsonl
 asktrace tag
 asktrace report
 ```
+
+Codex compresses a rollout it has not touched for a week into `.jsonl.zst` and deletes the
+`.jsonl`, so most of your history is compressed. Python 3.14 and newer usually read it with
+the standard library (`compression.zstd`); on older Pythons install `asktrace[codex]`, which
+adds `zstandard`. Without either, compressed rollouts are skipped with a one-line note on
+stderr and only about the last week is read. A session imported as `.jsonl` and again after
+Codex compressed it is not counted twice; when both forms are on disk, the `.jsonl` is read,
+as Codex does.
 
 It imports user-message events from legacy rollouts and completed user-message items
 from paginated rollouts. Mirrored model-input records, assistant replies and tool output
@@ -250,8 +259,8 @@ kept the app context, pasted-only messages and `exec` sessions) is not rewritten
 adds cleaned copies beside the old rows. Ingest Codex into a fresh database (`--db`) instead.
 
 Archived sessions are opt-in: pass their `archived_sessions` directory explicitly.
-This reader does not fetch cloud conversations, decode compressed rollouts, or reconstruct
-inherited history from fork/revert references. Raw-response-only exports are not supported.
+This reader does not fetch cloud conversations or reconstruct inherited history from
+fork/revert references. Raw-response-only exports are not supported.
 No Codex API key or CLI login is needed to read files already on your machine. Codex is
 an input source here; model-backed tagging still uses the existing Claude taggers.
 
