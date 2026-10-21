@@ -74,8 +74,16 @@ and paginated `item_completed` events whose item is `UserMessage`. It ignores mi
 [rollout](https://github.com/openai/codex/blob/main/codex-rs/rollout/src/lib.rs): `cli`,
 `vscode`, and the `atlas`/`chatgpt` custom sources) with a `user` or absent `thread_source`.
 `exec`, `mcp`, subagent and internal sessions are skipped so model context, scripted
-prompts and delegated instructions do not inflate a person's question history. Its
-synthetic fixtures follow
+prompts and delegated instructions do not inflate a person's question history.
+
+When a message starts with client context (`# Context from my IDE setup:`, `## Referenced
+chats with Codex:`, or the desktop app's `# Files mentioned by the user:`, `# Files pasted by
+the user:` and `<in-app-browser-context>`), only the text after the first `## My request:` or
+`## My request for Codex:` heading is kept, as Codex's own `strip_user_message_prefix` does
+for display. The heading is not split anywhere else, since without that context it is the
+user's own text. A `<send_user_message_question_reply>` envelope holds answers to a question
+the model asked, so it is not counted. The turn counter still advances for those messages, so
+the fingerprints of unwrapped messages do not change. Its synthetic fixtures follow
 the upstream [protocol](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/protocol.rs),
 [turn items](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/items.rs), and
 [persistence policy](https://github.com/openai/codex/blob/main/codex-rs/rollout/src/policy.rs).

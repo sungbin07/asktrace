@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from collections.abc import Iterator
 from datetime import datetime
 from pathlib import Path
@@ -31,6 +32,38 @@ def _user_text(payload: dict) -> str | None:
         and block.get("type") == "text"
         and isinstance(block.get("text"), str)
     )
+
+
+# Codex clients put app context (IDE tabs, mentioned or pasted files, a browser page) in front
+# of the user's words and start those words with a heading. Codex strips the same prefix for
+# display (USER_MESSAGE_BEGIN in codex-rs/protocol); the desktop app uses the shorter heading.
+_CONTEXT_PREFIXES = (
+    "# Context from my IDE setup:",
+    "## Referenced chats with Codex:",
+    "# Files mentioned by the user:",
+    "# Files pasted by the user:",
+    "<in-app-browser-context",
+)
+_REQUEST_HEADING_RE = re.compile(r"^## My request(?: for Codex)?:[ \t]*$", re.MULTILINE)
+_BROWSER_CONTEXT_END = "</in-app-browser-context>"
+# The desktop app sends answers to a question Codex asked in this envelope. Its question text
+# was written by the model, so the reply is not a question the user asked.
+_QUESTION_REPLY = ("<send_user_message_question_reply>", "</send_user_message_question_reply>")
+
+
+def _request_text(text: str) -> str:
+    """The user's own words in a Codex message, without the context the client added."""
+    text = text.strip()
+    if text.startswith(_CONTEXT_PREFIXES):
+        heading = _REQUEST_HEADING_RE.search(text)
+        if heading:
+            # The first heading: anything after it, even the same heading again, is the user's.
+            text = text[heading.end() :].strip()
+        elif text.startswith("<in-app-browser-context") and _BROWSER_CONTEXT_END in text:
+            text = text.split(_BROWSER_CONTEXT_END, 1)[1].strip()
+    if text.startswith(_QUESTION_REPLY[0]) and text.endswith(_QUESTION_REPLY[1]):
+        return ""
+    return text
 
 
 # The sources Codex itself lists as interactive (INTERACTIVE_SESSION_SOURCES in
@@ -92,7 +125,10 @@ class CodexSource(Source):
                 text = _user_text(payload)
                 if text is None:
                     continue
+                # Count the turn before unwrapping so the turn indices, and with them the
+                # fingerprints, of the other messages do not depend on this rule.
                 turn += 1
+                text = _request_text(text)
                 if not looks_like_question(text):
                     continue
                 ts = rec.get("timestamp")
@@ -103,7 +139,7 @@ class CodexSource(Source):
                 except ValueError:
                     continue
                 yield Question(
-                    text=text.strip(),
+                    text=text,
                     asked_at=asked_at,
                     source=self.name,
                     session_id=session_id,
