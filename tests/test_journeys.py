@@ -76,8 +76,14 @@ def test_existing_database_upgrade_preserves_questions_tags_and_report(tmp_path)
         """)
         conn.execute(
             "INSERT INTO questions VALUES (?, ?, ?, ?, ?, ?)",
-            ("legacy-id", "claude-code", "legacy-session", 1, "2026-09-01T09:00:00+00:00",
-             "What is SQLite WAL mode?"),
+            (
+                "legacy-id",
+                "claude-code",
+                "legacy-session",
+                1,
+                "2026-09-01T09:00:00+00:00",
+                "What is SQLite WAL mode?",
+            ),
         )
         conn.execute(
             "INSERT INTO tags VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
@@ -266,8 +272,12 @@ def test_private_html_links_untagged_days_and_escapes_all_user_content(tmp_path)
         jid = store.group_questions([question.fingerprint], title="<script>title()</script>")
         store.save_reflection(jid, learned='<iframe src="https://example.com">note</iframe>')
         html = journeys.to_html(
-            store.all_journeys(), {}, end=date(2026, 9, 2), weeks=2,
-            tz=ZoneInfo("Asia/Seoul"), timezone_label="Asia/Seoul",
+            store.all_journeys(),
+            {},
+            end=date(2026, 9, 2),
+            weeks=2,
+            tz=ZoneInfo("Asia/Seoul"),
+            timezone_label="Asia/Seoul",
         )
         parsed = _HTML()
         parsed.feed(html)
@@ -301,10 +311,14 @@ def test_html_window_and_multiday_journey_keep_questions_on_the_right_day(tmp_pa
 
 def test_private_export_does_not_use_out_of_window_question_as_title(tmp_path):
     with Store(tmp_path / "a.db") as store:
-        store.add_questions([
-            _question("This earlier private topic is outside the window", at="2026-08-01T12:00:00"),
-            _question("Question inside the selected week", 1, at="2026-09-01T12:00:00"),
-        ])
+        store.add_questions(
+            [
+                _question(
+                    "This earlier private topic is outside the window", at="2026-08-01T12:00:00"
+                ),
+                _question("Question inside the selected week", 1, at="2026-09-01T12:00:00"),
+            ]
+        )
         html = journeys.to_html(
             store.all_journeys(), {}, end=date(2026, 9, 2), weeks=1, tz=timezone.utc
         )
@@ -323,24 +337,52 @@ def test_cli_journey_reflection_and_private_grass_roundtrip(tmp_path, capsys, qu
     # Merely opening a reflection does not create a self-report.
     assert main([*prefix, "review", jid, "--format", "json"]) == 0
     assert json.loads(capsys.readouterr().out)[0]["reflection"] is None
-    assert main([
-        *prefix, "review", jid, "--goal", "Find evidence", "--open-question", "Measure?"
-    ]) == 0
+    assert (
+        main([*prefix, "review", jid, "--goal", "Find evidence", "--open-question", "Measure?"])
+        == 0
+    )
     assert "Find evidence" in capsys.readouterr().out
     assert main([*prefix, "review", jid, "--learned", "Measured API latency"]) == 0
     capsys.readouterr()
     assert main([*prefix, "journey", "show", jid, "--format", "json"]) == 0
     assert json.loads(capsys.readouterr().out)[0]["reflection"]["goal"] == "Find evidence"
-    assert main([
-        *prefix, "journey", "list", "--date", "2026-09-02", "--timezone", "Asia/Seoul",
-        "--format", "json",
-    ]) == 0
+    assert (
+        main(
+            [
+                *prefix,
+                "journey",
+                "list",
+                "--date",
+                "2026-09-02",
+                "--timezone",
+                "Asia/Seoul",
+                "--format",
+                "json",
+            ]
+        )
+        == 0
+    )
     assert len(json.loads(capsys.readouterr().out)[0]["questions"]) == 2
     output = tmp_path / "private.html"
-    assert main([
-        *prefix, "grass", "--format", "html", "--out", str(output), "--end", "2026-09-02",
-        "--weeks", "2", "--timezone", "Asia/Seoul",
-    ]) == 0
+    assert (
+        main(
+            [
+                *prefix,
+                "grass",
+                "--format",
+                "html",
+                "--out",
+                str(output),
+                "--end",
+                "2026-09-02",
+                "--weeks",
+                "2",
+                "--timezone",
+                "Asia/Seoul",
+            ]
+        )
+        == 0
+    )
     assert "private journey snapshot" in capsys.readouterr().out
     text = output.read_text()
     assert "Measured API latency" in text and "#day-2026-09-02" in text
@@ -351,11 +393,26 @@ def test_cli_journey_reflection_and_private_grass_roundtrip(tmp_path, capsys, qu
     assert public.startswith("<svg")
     assert "Find evidence" not in public and "What is a cache?" not in public
     assert "href=" not in public
-    assert main([*prefix, "journey", "split", jid, "--title", "API investigation",
-                 "--questions", questions[2].fingerprint]) == 0
+    assert (
+        main(
+            [
+                *prefix,
+                "journey",
+                "split",
+                jid,
+                "--title",
+                "API investigation",
+                "--questions",
+                questions[2].fingerprint,
+            ]
+        )
+        == 0
+    )
     split = capsys.readouterr().out.split()[-1]
-    assert main([*prefix, "journey", "group", "--into", jid,
-                 "--questions", questions[2].fingerprint]) == 0
+    assert (
+        main([*prefix, "journey", "group", "--into", jid, "--questions", questions[2].fingerprint])
+        == 0
+    )
     capsys.readouterr()
     with Store(db) as store:
         assert len(store.get_journey(jid)["questions"]) == 3
@@ -405,9 +462,10 @@ def test_private_export_failure_preserves_previous_file(tmp_path, monkeypatch, c
         raise OSError("output unavailable")
 
     monkeypatch.setattr(os, "replace", fail_replace)
-    assert main([
-        "--db", str(tmp_path / "a.db"), "grass", "--format", "html", "--out", str(output)
-    ]) == 2
+    assert (
+        main(["--db", str(tmp_path / "a.db"), "grass", "--format", "html", "--out", str(output)])
+        == 2
+    )
     assert "output unavailable" in capsys.readouterr().err
     assert output.read_text() == "Previous snapshot"
     assert not list(tmp_path.glob(".asktrace-*"))

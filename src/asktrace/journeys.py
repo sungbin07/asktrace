@@ -24,9 +24,7 @@ def session_journey_id(source: str, session_id: str, question_id: str) -> str:
     return f"s_{digest}"
 
 
-def select(
-    groups: list[dict], *, day: date | None = None, tz: tzinfo | None = None
-) -> list[dict]:
+def select(groups: list[dict], *, day: date | None = None, tz: tzinfo | None = None) -> list[dict]:
     """Create display records in the same calendar used by the grass."""
     selected = []
     for group in groups:
@@ -183,18 +181,18 @@ def to_html(
             out += [
                 f"<article><h3>{escape(group['title'])}</h3>",
                 f'<p class="meta"><code>{escape(group["id"])}</code> · '
-                f'{"Session grouping" if group["kind"] == "session" else "Your grouping"} · '
-                f'{len(group["questions"])} of {group["total_questions"]} questions</p>',
+                f"{'Session grouping' if group['kind'] == 'session' else 'Your grouping'} · "
+                f"{len(group['questions'])} of {group['total_questions']} questions</p>",
                 "<ol>",
             ]
             for question in group["questions"]:
                 out += [
                     f'<li id="question-{escape(question["id"], quote=True)}">',
                     f'<div class="meta">{escape(question["asked_at"])} · '
-                    f'{escape(question["source"])} · <code>{escape(question["id"])}</code></div>',
+                    f"{escape(question['source'])} · <code>{escape(question['id'])}</code></div>",
                     f'<div class="text">{escape(question["text"])}</div></li>',
                 ]
-            out += ["</ol><h4>Your reflection</h4>", "<p class=\"meta\">Self-reported.</p><dl>"]
+            out += ["</ol><h4>Your reflection</h4>", '<p class="meta">Self-reported.</p><dl>']
             reflection = group["reflection"] or {}
             for key, label in REFLECTION_FIELDS:
                 out += [

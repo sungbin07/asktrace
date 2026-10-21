@@ -257,9 +257,10 @@ class Store:
             missing = [qid for qid in ids if qid not in membership]
             if missing:
                 raise ValueError(f"unknown question: {missing[0]}")
-            if into is not None and not self.conn.execute(
-                "SELECT 1 FROM journeys WHERE id = ?", (into,)
-            ).fetchone():
+            if (
+                into is not None
+                and not self.conn.execute("SELECT 1 FROM journeys WHERE id = ?", (into,)).fetchone()
+            ):
                 raise ValueError(f"unknown journey: {into}")
             if split_from is not None:
                 original = {qid for qid, jid in membership.items() if jid == split_from}
@@ -307,7 +308,9 @@ class Store:
             values = {
                 key: supplied if supplied is not None else (row[key] if row else "")
                 for key, supplied in (
-                    ("goal", goal), ("learned", learned), ("open_question", open_question)
+                    ("goal", goal),
+                    ("learned", learned),
+                    ("open_question", open_question),
                 )
             }
             self.conn.execute(
