@@ -129,6 +129,21 @@ def test_malformed_records_do_not_prevent_later_valid_questions(tmp_path):
     assert question.session_id == "rollout"
 
 
+def test_live_rollout_cut_inside_a_character_keeps_other_questions(tmp_path, capsys):
+    # A running session can end mid-way through a multi-byte character. That line is
+    # skipped; earlier lines and the other files in the directory are still ingested.
+    (tmp_path / "done.jsonl").write_bytes(FIXTURE.read_bytes())
+    live = tmp_path / "live.jsonl"
+    _write_records(live, [_event("explain sqlite WAL mode")])
+    cut = json.dumps(_event("트랜잭션 격리 수준이 뭐야?"), ensure_ascii=False).encode()
+    with live.open("ab") as fh:
+        fh.write(cut[: cut.index("격".encode()) + 1])
+    (question,) = CodexSource(live).questions()
+    assert question.text == "explain sqlite WAL mode"
+    assert main(["--db", str(tmp_path / "codex.db"), "ingest", "codex", str(tmp_path)]) == 0
+    assert "ingested 3 new questions" in capsys.readouterr().out
+
+
 def test_repeat_import_copies_and_appended_repeated_questions(tmp_path):
     path = tmp_path / "original.jsonl"
     path.write_bytes(FIXTURE.read_bytes())
