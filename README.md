@@ -230,8 +230,11 @@ asktrace report
 ```
 
 It imports user-message events from legacy rollouts and completed user-message items
-from paginated rollouts. Mirrored model-input records, assistant replies, tool output,
-and sessions marked as subagent/internal are excluded. Re-importing the same session
+from paginated rollouts. Mirrored model-input records, assistant replies and tool output
+are excluded. Only sessions Codex itself treats as interactive count: the CLI, the IDE
+extension and the desktop app. Sessions started by `codex exec` or by another agent through
+Codex's MCP/app server, and subagent/internal threads, are skipped, because a script or a
+model wrote those prompts, not you. Re-importing the same session
 does not duplicate questions. Malformed records, including an incomplete final line,
 are skipped.
 

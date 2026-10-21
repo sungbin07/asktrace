@@ -96,15 +96,39 @@ def test_paginated_completed_user_items(tmp_path):
         {"source": {"internal": "memory_consolidation"}},
         {"source": "internal"},
         {"source": "cli", "thread_source": "guardian_review"},
+        # Started by a script (`codex exec`) or another agent (Codex as MCP/app server).
+        {"source": "exec"},
+        {"source": "mcp"},
+        {"source": "unknown"},
+        {"source": {"custom": "some-integration"}},
     ],
 )
-def test_internal_threads_do_not_count_as_human_questions(tmp_path, meta):
+def test_non_interactive_threads_do_not_count_as_human_questions(tmp_path, meta):
     path = tmp_path / "child.jsonl"
     _write_records(
         path,
         [{"type": "session_meta", "payload": {"id": "child", **meta}}, _event("review this code")],
     )
     assert list(CodexSource(path).questions()) == []
+
+
+@pytest.mark.parametrize(
+    "meta",
+    [
+        {"source": "cli"},
+        {"source": "vscode", "thread_source": "user"},
+        {},  # Codex reads a missing source as vscode
+        {"source": {"custom": "atlas"}},
+        {"source": {"custom": "chatgpt"}},
+    ],
+)
+def test_interactive_threads_count_as_human_questions(tmp_path, meta):
+    path = tmp_path / "session.jsonl"
+    _write_records(
+        path,
+        [{"type": "session_meta", "payload": {"id": "s", **meta}}, _event("review this code")],
+    )
+    assert [q.text for q in CodexSource(path).questions()] == ["review this code"]
 
 
 def test_malformed_records_do_not_prevent_later_valid_questions(tmp_path):

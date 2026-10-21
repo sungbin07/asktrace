@@ -69,8 +69,13 @@ follow from running inside someone else's session:
 
 The Codex reader consumes local rollout `event_msg` records: legacy `user_message` events
 and paginated `item_completed` events whose item is `UserMessage`. It ignores mirrored
-`response_item` records and internal/subagent sessions so model context and delegated
-instructions do not inflate a person's question history. Its synthetic fixtures follow
+`response_item` records, and reads only sessions whose `source` Codex lists as interactive
+(`INTERACTIVE_SESSION_SOURCES` in
+[rollout](https://github.com/openai/codex/blob/main/codex-rs/rollout/src/lib.rs): `cli`,
+`vscode`, and the `atlas`/`chatgpt` custom sources) with a `user` or absent `thread_source`.
+`exec`, `mcp`, subagent and internal sessions are skipped so model context, scripted
+prompts and delegated instructions do not inflate a person's question history. Its
+synthetic fixtures follow
 the upstream [protocol](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/protocol.rs),
 [turn items](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/items.rs), and
 [persistence policy](https://github.com/openai/codex/blob/main/codex-rs/rollout/src/policy.rs).
