@@ -179,6 +179,11 @@ def test_messages_without_app_context_keep_their_fingerprints():
             "What does this page load first?",
             "What does this page load first?",
         ),
+        (
+            "# Files mentioned by the user:\r\n\r\n## a.md: /x/a.md\r\n\r\n## My request:\r\n"
+            "Why is this slow?",
+            "Why is this slow?",
+        ),
     ],
 )
 def test_request_heading_is_only_split_after_app_context(tmp_path, text, expected):
