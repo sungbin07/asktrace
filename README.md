@@ -244,7 +244,9 @@ and tagger input start with your words. A message that holds only pasted files a
 request is not counted, and neither are your answers to a question Codex asked you.
 
 Re-importing the same session does not duplicate questions. Malformed records, including an incomplete final line,
-are skipped.
+are skipped. A database filled by an earlier development build of the Codex reader (which
+kept the app context, pasted-only messages and `exec` sessions) is not rewritten: re-importing
+adds cleaned copies beside the old rows. Ingest Codex into a fresh database (`--db`) instead.
 
 Archived sessions are opt-in: pass their `archived_sessions` directory explicitly.
 This reader does not fetch cloud conversations, decode compressed rollouts, or reconstruct
