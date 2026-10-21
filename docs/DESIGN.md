@@ -71,22 +71,24 @@ The Codex reader consumes local rollout `event_msg` records: legacy `user_messag
 and paginated `item_completed` events whose item is `UserMessage`. It ignores mirrored
 `response_item` records, and reads only sessions whose `source` Codex lists as interactive
 (`INTERACTIVE_SESSION_SOURCES` in
-[rollout](https://github.com/openai/codex/blob/main/codex-rs/rollout/src/lib.rs): `cli`,
+[rollout](https://github.com/openai/codex/blob/rust-v0.147.0/codex-rs/rollout/src/lib.rs): `cli`,
 `vscode`, and the `atlas`/`chatgpt` custom sources) with a `user` or absent `thread_source`.
 `exec`, `mcp`, subagent and internal sessions are skipped so model context, scripted
 prompts and delegated instructions do not inflate a person's question history.
 
 When a message starts with client context (`# Context from my IDE setup:`, `## Referenced
-chats with Codex:`, or the desktop app's `# Files mentioned by the user:`, `# Files pasted by
-the user:` and `<in-app-browser-context>`), only the text after the first `## My request:` or
-`## My request for Codex:` heading is kept, as Codex's own `strip_user_message_prefix` does
-for display. The heading is not split anywhere else, since without that context it is the
-user's own text. A `<send_user_message_question_reply>` envelope holds answers to a question
-the model asked, so it is not counted. The turn counter still advances for those messages, so
+chats with Codex:`, or the desktop app's `## Referenced ChatGPT conversation:`, `# Files
+mentioned by the user:`, `# Files pasted by the user:` and `<in-app-browser-context>`), only
+the text after the first `## My request:` or `## My request for Codex:` heading is kept. This is
+similar to Codex's own `strip_user_message_prefix`, which only knows `## My request for Codex:`
+and matches it anywhere; here the heading is not split without that context in front, since
+then it is the user's own text, and inside a browser page it is ignored. Two envelopes are not
+counted: `<send_user_message_question_reply>` holds answers to a question the model asked, and
+`<heartbeat>` is a prompt a Codex Desktop automation sends on a schedule. The turn counter still advances for those messages, so
 the fingerprints of unwrapped messages do not change. Its synthetic fixtures follow
-the upstream [protocol](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/protocol.rs),
-[turn items](https://github.com/openai/codex/blob/main/codex-rs/protocol/src/items.rs), and
-[persistence policy](https://github.com/openai/codex/blob/main/codex-rs/rollout/src/policy.rs).
+the upstream [protocol](https://github.com/openai/codex/blob/rust-v0.147.0/codex-rs/protocol/src/protocol.rs),
+[turn items](https://github.com/openai/codex/blob/rust-v0.147.0/codex-rs/protocol/src/items.rs), and
+[persistence policy](https://github.com/openai/codex/blob/rust-v0.147.0/codex-rs/rollout/src/policy.rs).
 
 ## Depth scale
 
