@@ -33,13 +33,17 @@ def _user_text(payload: dict) -> str | None:
     )
 
 
-def _internal_session(meta: dict) -> bool:
-    source = meta.get("source")
-    if source in ("subagent", "internal"):
-        return True
-    if isinstance(source, dict) and ("subagent" in source or "internal" in source):
-        return True
-    return meta.get("thread_source") not in (None, "user")
+# The sources Codex itself lists as interactive (INTERACTIVE_SESSION_SOURCES in
+# codex-rs/rollout). `exec` and `mcp` (app server) sessions are started by scripts or other
+# agents, and subagent/internal threads by Codex, so their prompts are not the user's.
+_INTERACTIVE_SOURCES = ("cli", "vscode", {"custom": "atlas"}, {"custom": "chatgpt"})
+
+
+def _interactive_session(meta: dict) -> bool:
+    # Codex reads a missing source as "vscode".
+    if meta.get("source", "vscode") not in _INTERACTIVE_SOURCES:
+        return False
+    return meta.get("thread_source") in (None, "user")
 
 
 class CodexSource(Source):
@@ -76,7 +80,7 @@ class CodexSource(Source):
                 if not isinstance(payload, dict):
                     continue
                 if rec.get("type") == "session_meta":
-                    if _internal_session(payload):
+                    if not _interactive_session(payload):
                         return
                     if isinstance(payload.get("id"), str) and payload["id"]:
                         session_id = payload["id"]
